@@ -3,13 +3,18 @@ import pandas as pd
 import datetime
 
 # Load Excel File
-def load_data():
-    excel_file = "Ariento Pricing 2025.xlsx"
-    ariento_plans = pd.read_excel(excel_file, sheet_name="Ariento Plans")
-    license_types = pd.read_excel(excel_file, sheet_name="Ariento License Type")
-    microsoft_licenses = pd.read_excel(excel_file, sheet_name="Microsoft Seat Licenses")
-    additional_licenses = pd.read_excel(excel_file, sheet_name="Additional Licenses")
+def load_data(file):
+    ariento_plans = pd.read_excel(file, sheet_name="Ariento Plans")
+    license_types = pd.read_excel(file, sheet_name="Ariento License Type")
+    microsoft_licenses = pd.read_excel(file, sheet_name="Microsoft Seat Licenses")
+    additional_licenses = pd.read_excel(file, sheet_name="Additional Licenses")
     return ariento_plans, license_types, microsoft_licenses, additional_licenses
+
+uploaded_file = st.file_uploader("Upload Ariento Pricing Excel File", type=["xlsx"])
+if uploaded_file:
+    ariento_plans, license_types, microsoft_licenses, additional_licenses = load_data(uploaded_file)
+else:
+    st.stop()
 
 # Load data
 ariento_plans, license_types, microsoft_licenses, additional_licenses = load_data()
