@@ -7,8 +7,7 @@ from io import BytesIO
 
 # Load Excel File from GitHub
 def load_data():
-    # Replace with the raw URL of your Excel file on GitHub
-    excel_url = "https://raw.githubusercontent.com/yourusername/yourrepository/main/Ariento%20Pricing%202025.xlsx"
+    excel_url = "https://raw.githubusercontent.com/Robi-Show/Quote-Tool/main/Ariento%20Pricing%202025.xlsx"
     response = requests.get(excel_url)
     if response.status_code != 200:
         st.error("Failed to fetch the Excel file. Please check the file URL.")
