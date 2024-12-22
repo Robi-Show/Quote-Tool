@@ -2,19 +2,25 @@ import streamlit as st
 import pandas as pd
 import datetime
 
-# Load Excel File
-def load_data(file):
-    ariento_plans = pd.read_excel(file, sheet_name="Ariento Plans")
-    license_types = pd.read_excel(file, sheet_name="Ariento License Type")
-    microsoft_licenses = pd.read_excel(file, sheet_name="Microsoft Seat Licenses")
-    additional_licenses = pd.read_excel(file, sheet_name="Additional Licenses")
-    return ariento_plans, license_types, microsoft_licenses, additional_licenses
+import requests
+from io import BytesIO
 
-uploaded_file = st.file_uploader("Upload Ariento Pricing Excel File", type=["xlsx"])
-if uploaded_file:
-    ariento_plans, license_types, microsoft_licenses, additional_licenses = load_data(uploaded_file)
-else:
-    st.stop()
+# Load Excel File from GitHub
+def load_data():
+    # Replace with the raw URL of your Excel file on GitHub
+    excel_url = "https://raw.githubusercontent.com/yourusername/yourrepository/main/Ariento%20Pricing%202025.xlsx"
+    response = requests.get(excel_url)
+    if response.status_code != 200:
+        st.error("Failed to fetch the Excel file. Please check the file URL.")
+        st.stop()
+
+    # Load the Excel file from the response
+    excel_file = BytesIO(response.content)
+    ariento_plans = pd.read_excel(excel_file, sheet_name="Ariento Plans")
+    license_types = pd.read_excel(excel_file, sheet_name="Ariento License Type")
+    microsoft_licenses = pd.read_excel(excel_file, sheet_name="Microsoft Seat Licenses")
+    additional_licenses = pd.read_excel(excel_file, sheet_name="Additional Licenses")
+    return ariento_plans, license_types, microsoft_licenses, additional_licenses
 
 # Load data
 ariento_plans, license_types, microsoft_licenses, additional_licenses = load_data()
