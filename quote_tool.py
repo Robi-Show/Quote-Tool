@@ -1,9 +1,13 @@
 import streamlit as st
 import pandas as pd
 import datetime
-
 import requests
 from io import BytesIO
+from PIL import Image
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Image as ReportLabImage
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
 
 # Load Excel File from GitHub
 def load_data():
@@ -13,24 +17,35 @@ def load_data():
         st.error("Failed to fetch the Excel file. Please check the file URL.")
         st.stop()
 
-    # Load the Excel file from the response
     excel_file = BytesIO(response.content)
-    ariento_plans = pd.read_excel(excel_file, sheet_name="Ariento Plans")
-    license_types = pd.read_excel(excel_file, sheet_name="Ariento License Type")
-    microsoft_licenses = pd.read_excel(excel_file, sheet_name="Microsoft Seat Licenses")
-    additional_licenses = pd.read_excel(excel_file, sheet_name="Additional Licenses")
+    try:
+        ariento_plans = pd.read_excel(excel_file, sheet_name="Ariento Plans")
+        license_types = pd.read_excel(excel_file, sheet_name="Ariento License Type")
+        microsoft_licenses = pd.read_excel(excel_file, sheet_name="Microsoft Seat Licenses")
+        additional_licenses = pd.read_excel(excel_file, sheet_name="Additional Licenses")
+    except KeyError as e:
+        st.error(f"Missing sheet or column in the Excel file: {e}")
+        st.stop()
     return ariento_plans, license_types, microsoft_licenses, additional_licenses
 
 # Load data
 ariento_plans, license_types, microsoft_licenses, additional_licenses = load_data()
 
-from PIL import Image
-
 # Title and Description
-logo = Image.open("Ariento Logo Blue.png")  # Replace 'logo.png' with the path to your logo file
-st.image(logo, width=200)
+try:
+    logo = Image.open("Ariento Logo Blue.png")
+    st.image(logo, width=200)
+except FileNotFoundError:
+    st.error("Logo file not found. Please upload 'Ariento Logo Blue.png'.")
+
 st.markdown('<h1 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Ariento Quote Tool</h1>', unsafe_allow_html=True)
+st.markdown('<hr style="border: 1px solid #E8A33D;">', unsafe_allow_html=True)
 st.markdown('<p style="font-family: Arial; font-size: 12pt; line-height: 1.15; color: #3265A7;">This tool helps you generate a quote based on Ariento Pricing 2025.</p>', unsafe_allow_html=True)
+
+# Add Section Separator
+def section_separator():
+    st.markdown('<hr style="border: 1px solid #E8A33D;">', unsafe_allow_html=True)
+
 # Step 1: Select Ariento Plan
 st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Ariento Licenses</h2>', unsafe_allow_html=True)
 ariento_plan = st.selectbox("Select an Ariento Plan", ariento_plans["Plan Name"].unique(), key="selectbox_ariento_plan")
@@ -129,7 +144,7 @@ else:
 
 st.write(f"Onboarding Price: ${onboarding_price:.2f}")
 
-# Total Calculation
+# Step 4: Total Calculation
 st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Total Quote Cost</h2>', unsafe_allow_html=True)
 total_cost = onboarding_price
 
@@ -169,13 +184,12 @@ if onboarding_price > 0:
     data.append(["Onboarding", onboarding_type, 1, f"${onboarding_price:.2f}", f"${onboarding_price:.2f}"])
 
 # Display table
-import pandas as pd
+summary_df = pd.DataFrame(data, columns=["Category", "Item", "Quantity", "Price Per Unit", "Total Cost"])
+st.table(summary_df.style.hide(axis='index'))
 
 # Display current date and time
 date_time_now = datetime.datetime.now().strftime('%B %d, %Y %H:%M:%S')
 st.markdown(f'<p style="font-family: Arial; font-size: 12pt; color: #3265A7;">Date and Time: {date_time_now}</p>', unsafe_allow_html=True)
-summary_df = pd.DataFrame(data, columns=["Category", "Item", "Quantity", "Price Per Unit", "Total Cost"])
-st.table(summary_df.style.hide(axis='index'))
 
 # Legal Jargon
 st.markdown(
@@ -187,6 +201,84 @@ st.markdown(
         not constitute a binding agreement and is provided for informational purposes only. Terms and conditions 
         may apply. Please contact us with any questions or for further clarification.
     </div>
-    """,
+  """,
     unsafe_allow_html=True
+)
+
+# Exportable Summary Table
+st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Summary of Selected Items</h2>', unsafe_allow_html=True)
+
+# Generate CSV
+def convert_df_to_csv(df):
+    return df.to_csv(index=False).encode('utf-8')
+
+csv_data = convert_df_to_csv(summary_df)
+
+st.download_button(
+    label="Download Summary as CSV",
+    data=csv_data,
+    file_name="summary_table.csv",
+    mime="text/csv"
+)
+
+# Generate PDF Function
+def generate_pdf(df, total_cost):
+    buffer = BytesIO()
+    pdf = SimpleDocTemplate(buffer, pagesize=letter)
+    elements = []
+
+    # Add Logo
+    try:
+        logo_path = "Ariento Logo Blue.png"
+        elements.append(ReportLabImage(logo_path, width=100, height=50))
+    except Exception:
+        elements.append(Paragraph("Ariento Logo Missing", getSampleStyleSheet()['Normal']))
+
+    # Add Date and Time
+    current_datetime = datetime.datetime.now().strftime('%B %d, %Y %H:%M:%S')
+    elements.append(Paragraph(f"Date and Time: {current_datetime}", getSampleStyleSheet()['Normal']))
+
+    # Add Total Cost
+    elements.append(Paragraph(f"Total Cost: ${total_cost:.2f}", getSampleStyleSheet()['Heading2']))
+
+    # Add Summary Table
+    table_data = [list(df.columns)] + df.values.tolist()
+    table = Table(table_data)
+    style = TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#E8A33D")),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor("#F7F7F7")),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+    ])
+    table.setStyle(style)
+    elements.append(table)
+
+    # Add Legal Notice
+    legal_notice = (
+	" "
+        "This quote is valid for 30 days from the date of issuance. Prices are subject to change after this period "
+        "and are contingent upon availability and market conditions at the time of order placement. This quote does "
+        "not constitute a binding agreement and is provided for informational purposes only. Terms and conditions "
+        "may apply. Please contact us with any questions or for further clarification."
+    )
+    elements.append(Paragraph(legal_notice, getSampleStyleSheet()['Normal']))
+
+    pdf.build(elements)
+    buffer.seek(0)
+    return buffer
+
+# Generate PDF Data
+pdf_data = generate_pdf(summary_df, total_cost)
+
+# Download Button for PDF
+st.download_button(
+    label="Download Summary as PDF",
+    data=pdf_data,
+    file_name="summary_table.pdf",
+    mime="application/pdf"
 )
