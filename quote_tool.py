@@ -4,9 +4,11 @@ import datetime
 import requests
 from io import BytesIO
 from PIL import Image
+from PIL import Image as PILImage
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Image as ReportLabImage
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib import colors
 
 # Load Excel File from GitHub
@@ -98,10 +100,10 @@ while True:
                 ["Select License"] + list(microsoft_licenses["License"].unique()),
                 key=f"other_license_{row_counter}"
             )
-        if other_license == "Select License":
-            continue
-        microsoft_license = other_license
+        if other_license != "Select License":
+            microsoft_license = other_license  # Update to selected license from "Other"
 
+    # Fetch price and allow quantity update
     with cols[1]:
         quantity = st.number_input(
             f"Quantity for {microsoft_license}",
@@ -155,8 +157,8 @@ total_cost += sum(
 )
 total_cost += sum(
     quantity * (
-        filtered_microsoft.loc[filtered_microsoft["License"] == license, "Price"].values[0]
-        if not filtered_microsoft.loc[filtered_microsoft["License"] == license, "Price"].empty else 0.0
+        microsoft_licenses.loc[microsoft_licenses["License"] == license, "Price"].values[0]
+        if not microsoft_licenses.loc[microsoft_licenses["License"] == license, "Price"].empty else 0.0
     ) for license, quantity in microsoft_seats.items()
 )
 
@@ -172,9 +174,9 @@ for seat_type, quantity in seat_types.items():
     cost = quantity * price
     data.append(["Seat Type", seat_type, quantity, f"${price:.2f}", f"${cost:.2f}"])
 
-# Add Microsoft licenses
+# Add Microsoft or Other licenses to summary
 for license, quantity in microsoft_seats.items():
-    price = filtered_microsoft.loc[filtered_microsoft["License"] == license, "Price"].values[0] if not filtered_microsoft.loc[filtered_microsoft["License"] == license, "Price"].empty else 0.0
+    price = microsoft_licenses.loc[microsoft_licenses["License"] == license, "Price"].values[0] if not microsoft_licenses.loc[microsoft_licenses["License"] == license, "Price"].empty else 0.0
     cost = quantity * price
     data.append(["Microsoft License", license, quantity, f"${price:.2f}", f"${cost:.2f}"])
 
@@ -226,12 +228,28 @@ def generate_pdf(df, total_cost):
     pdf = SimpleDocTemplate(buffer, pagesize=letter)
     elements = []
 
-    # Add Logo
+ # Add Logo with Aspect Ratio Maintained
     try:
         logo_path = "Ariento Logo Blue.png"
-        elements.append(ReportLabImage(logo_path, width=100, height=50))
-    except Exception:
-        elements.append(Paragraph("Ariento Logo Missing", getSampleStyleSheet()['Normal']))
+        pil_image = PILImage.open(logo_path)
+        original_width, original_height = pil_image.size
+        max_width, max_height = 150, 75  # Maximum dimensions for the logo
+        aspect_ratio = original_width / original_height
+
+        if original_width > max_width:
+            resized_width = max_width
+            resized_height = max_width / aspect_ratio
+        else:
+            resized_width = original_width
+            resized_height = original_height
+
+        if resized_height > max_height:
+            resized_height = max_height
+            resized_width = max_height * aspect_ratio
+
+        elements.append(ReportLabImage(logo_path, width=resized_width, height=resized_height))
+    except Exception as e:
+        elements.append(Paragraph(f"Error loading logo: {str(e)}", getSampleStyleSheet()['Normal']))
 
     # Add Date and Time
     current_datetime = datetime.datetime.now().strftime('%B %d, %Y %H:%M:%S')
@@ -240,9 +258,24 @@ def generate_pdf(df, total_cost):
     # Add Total Cost
     elements.append(Paragraph(f"Total Cost: ${total_cost:.2f}", getSampleStyleSheet()['Heading2']))
 
-    # Add Summary Table
-    table_data = [list(df.columns)] + df.values.tolist()
-    table = Table(table_data)
+    # Define a ParagraphStyle for word wrapping
+    style = ParagraphStyle(
+        name="WrappedText",
+        fontName="Helvetica",
+        fontSize=10,
+        leading=12,
+        wordWrap="LTR",
+
+    )
+    # Format the table data with wrapped items
+    table_data = [list(df.columns)]  # Header row
+    for row in df.values.tolist():
+        # Wrap the "Item" column text (assume it's the second column)
+        row[1] = Paragraph(str(row[1]), style)  # Wrap the Item column
+        table_data.append(row)
+
+    # Create and style the table
+    table = Table(table_data, colWidths=[100, 150, 50, 100, 100])  # Adjust column widths
     style = TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#E8A33D")),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
