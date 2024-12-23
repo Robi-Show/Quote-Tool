@@ -22,14 +22,13 @@ def load_data():
         ariento_plans = pd.read_excel(excel_file, sheet_name="Ariento Plans")
         license_types = pd.read_excel(excel_file, sheet_name="Ariento License Type")
         microsoft_licenses = pd.read_excel(excel_file, sheet_name="Microsoft Seat Licenses")
-        additional_licenses = pd.read_excel(excel_file, sheet_name="Additional Licenses")
     except KeyError as e:
         st.error(f"Missing sheet or column in the Excel file: {e}")
         st.stop()
-    return ariento_plans, license_types, microsoft_licenses, additional_licenses
+    return ariento_plans, license_types, microsoft_licenses
 
 # Load data
-ariento_plans, license_types, microsoft_licenses, additional_licenses = load_data()
+ariento_plans, license_types, microsoft_licenses = load_data()
 
 # Title and Description
 try:
@@ -72,8 +71,8 @@ while True:
         st.write(f"Price: ${price:.2f} | Quantity: {quantity} | Cost: ${cost:.2f}")
         seat_types[seat_type] = quantity
 
-# Step 2: Microsoft Licenses
-st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Microsoft Licenses</h2>', unsafe_allow_html=True)
+# Step 2: Microsoft and Other Licenses
+st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Microsoft & Other Licenses</h2>', unsafe_allow_html=True)
 filtered_microsoft = microsoft_licenses[microsoft_licenses["Plan"] == ariento_plan]
 microsoft_seats = {}
 
@@ -85,7 +84,7 @@ while True:
     cols = st.columns(2)
     with cols[0]:
         microsoft_license = st.selectbox(
-            "Select a Microsoft License",
+            "Select a Microsoft License or Other for more options",
             ["Select License"] + microsoft_license_options,
             key=f"microsoft_license_{row_counter}"
         )
