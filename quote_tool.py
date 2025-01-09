@@ -122,16 +122,19 @@ while True:
 
 # Step 3: Onboarding
 st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Onboarding</h2>', unsafe_allow_html=True)
+
+# User selects the onboarding payment type
 onboarding_type = st.selectbox(
     "Select Onboarding Payment Type", 
     ["Monthly Payments, 1-Year Subscription", "Monthly Payments, 3-Year Subscription (50% off)", 
      "Annual Payment, 1 Year Subscription (50% off)", "Other", "None"]
 )
 
-onboarding_price = 0.0
-if onboarding_type in ["None", "Other"]:
-    onboarding_price = st.number_input("Enter Onboarding Price", min_value=0.0, value=0.0)
-else:
+# Determine if the user selected Annual Payment
+annual_payment = onboarding_type == "Annual Payment, 1 Year Subscription (50% off)"
+
+# Initial onboarding calculation based on payment type
+if onboarding_type in ["Monthly Payments, 1-Year Subscription", "Monthly Payments, 3-Year Subscription (50% off)"]:
     grouping_one_total = sum(
         quantity * (
             filtered_licenses.loc[filtered_licenses["Seat Type"] == seat_type, "Price"].values[0]
@@ -139,30 +142,76 @@ else:
         ) for seat_type, quantity in seat_types.items()
     )
     if "50% off" in onboarding_type:
-        onboarding_price = grouping_one_total * 1
+        onboarding_price = grouping_one_total  # 1 month's cost for 50% off
     else:
-        onboarding_price = grouping_one_total * 2
+        onboarding_price = grouping_one_total * 2  # 2 months' cost
+elif onboarding_type == "Annual Payment, 1 Year Subscription (50% off)":
+    onboarding_price = sum(
+        quantity * (
+            filtered_licenses.loc[filtered_licenses["Seat Type"] == seat_type, "Price"].values[0]
+            if not filtered_licenses.loc[filtered_licenses["Seat Type"] == seat_type, "Price"].empty else 0.0
+        ) for seat_type, quantity in seat_types.items()
+    )  # Onboarding is 1 month's cost in this case
+elif onboarding_type in ["Other", "None"]:
+    onboarding_price = st.number_input("Enter Onboarding Price", min_value=0.0, value=0.0)
+
+# Apply the minimum onboarding cost rule
+onboarding_price = max(onboarding_price, 3000)
 
 st.write(f"Onboarding Price: ${onboarding_price:.2f}")
 
 # Step 4: Total Calculation
 st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Total Quote Cost</h2>', unsafe_allow_html=True)
-total_cost = onboarding_price
 
-total_cost += sum(
-    quantity * (
-        filtered_licenses.loc[filtered_licenses["Seat Type"] == seat_type, "Price"].values[0]
-        if not filtered_licenses.loc[filtered_licenses["Seat Type"] == seat_type, "Price"].empty else 0.0
-    ) for seat_type, quantity in seat_types.items()
-)
-total_cost += sum(
-    quantity * (
-        microsoft_licenses.loc[microsoft_licenses["License"] == license, "Price"].values[0]
-        if not microsoft_licenses.loc[microsoft_licenses["License"] == license, "Price"].empty else 0.0
-    ) for license, quantity in microsoft_seats.items()
-)
+if annual_payment:
+    # Calculate recurring annual cost
+    recurring_annual_cost = sum(
+        quantity * (
+            filtered_licenses.loc[filtered_licenses["Seat Type"] == seat_type, "Price"].values[0]
+            if not filtered_licenses.loc[filtered_licenses["Seat Type"] == seat_type, "Price"].empty else 0.0
+        ) for seat_type, quantity in seat_types.items()
+    ) + sum(
+        quantity * (
+            microsoft_licenses.loc[microsoft_licenses["License"] == license, "Price"].values[0]
+            if not microsoft_licenses.loc[microsoft_licenses["License"] == license, "Price"].empty else 0.0
+        ) for license, quantity in microsoft_seats.items()
+    )
+    
+    # Total cost for annual payment
+    total_cost = (recurring_annual_cost * 12) + onboarding_price
+    monthly_recurring_cost = None  # No monthly recurring costs for annual payment
+else:
+    # Calculate recurring monthly costs (licenses only)
+    monthly_recurring_cost = sum(
+        quantity * (
+            filtered_licenses.loc[filtered_licenses["Seat Type"] == seat_type, "Price"].values[0]
+            if not filtered_licenses.loc[filtered_licenses["Seat Type"] == seat_type, "Price"].empty else 0.0
+        ) for seat_type, quantity in seat_types.items()
+    ) + sum(
+        quantity * (
+            microsoft_licenses.loc[microsoft_licenses["License"] == license, "Price"].values[0]
+            if not microsoft_licenses.loc[microsoft_licenses["License"] == license, "Price"].empty else 0.0
+        ) for license, quantity in microsoft_seats.items()
+    )
+    
+    # Total cost for monthly payment
+    total_cost = monthly_recurring_cost + onboarding_price
 
-st.write(f"### Total Cost: ${total_cost:.2f}")
+# Display Total Costs results
+if annual_payment:
+    # For Annual Payment
+    st.write(f"### Total Cost (Initial Payment): ${total_cost:.2f}")
+    st.write(f"Note: Includes 12 months of recurring costs and onboarding.")
+else:
+    # For Monthly Payment
+    st.write(f"### Total Cost (Initial Payment): ${total_cost:.2f}")
+    st.write(f"Note: Includes first month's recurring costs and onboarding.")
+
+# Display Monthly Recurring Cost
+if monthly_recurring_cost is not None:
+    st.write(f"### Monthly Recurring Cost: ${monthly_recurring_cost:.2f}")
+else:
+    st.write(f"### Monthly Recurring Cost: None (Annual Payment Selected)")
 
 # Summary Table
 st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Summary of Selected Items</h2>', unsafe_allow_html=True)
@@ -223,7 +272,7 @@ st.download_button(
 )
 
 # Generate PDF Function
-def generate_pdf(df, total_cost, onboarding_price, ariento_plan):
+def generate_pdf(df, total_cost, onboarding_price, ariento_plan, monthly_recurring_cost, annual_payment):
     buffer = BytesIO()
     pdf = SimpleDocTemplate(buffer, pagesize=letter)
     elements = []
@@ -250,6 +299,7 @@ def generate_pdf(df, total_cost, onboarding_price, ariento_plan):
         elements.append(ReportLabImage(logo_path, width=resized_width, height=resized_height))
     except Exception as e:
         elements.append(Paragraph(f"Error loading logo: {str(e)}", getSampleStyleSheet()['Normal']))
+    elements.append(Paragraph("&nbsp;", getSampleStyleSheet()['Normal']))  # Adds a blank line for spacing
 
     # Add Date and Time
     current_datetime = datetime.datetime.now().strftime('%B %d, %Y %H:%M:%S')
@@ -258,12 +308,20 @@ def generate_pdf(df, total_cost, onboarding_price, ariento_plan):
     # Add Ariento Plan
     elements.append(Paragraph(f"<strong>Ariento Plan:</strong> {ariento_plan}", getSampleStyleSheet()['Normal']))
 
-    # Add Total Cost
-    elements.append(Paragraph(f"Total Cost: ${total_cost:.2f}", getSampleStyleSheet()['Heading2']))
+       # Add Total Cost (Initial Payment)
+    elements.append(Paragraph(f"<strong>Total Cost (Initial Payment):</strong> ${total_cost:.2f}", getSampleStyleSheet()['Heading2']))
 
-    # Calculate Monthly Recurring Cost
-    monthly_recurring_cost = total_cost - onboarding_price
-    elements.append(Paragraph(f"Monthly Recurring Cost: ${monthly_recurring_cost:.2f}", getSampleStyleSheet()['Normal']))
+    # Add Note directly under Total Cost
+    elements.append(Paragraph("Note: Includes first month's recurring costs and onboarding." if not annual_payment else
+                              "Note: Includes 12 months of recurring costs and onboarding.", getSampleStyleSheet()['Normal']))
+    elements.append(Paragraph("&nbsp;", getSampleStyleSheet()['Normal']))  # Adds a blank line for spacing
+
+    # Add Monthly Recurring Cost (if applicable)
+    if monthly_recurring_cost is not None:
+        elements.append(Paragraph(f"Monthly Recurring Cost: ${monthly_recurring_cost:.2f}", getSampleStyleSheet()['Normal']))
+    else:
+        elements.append(Paragraph("Monthly Recurring Cost: None (Annual Payment Selected)", getSampleStyleSheet()['Normal']))
+
 
     # Define a ParagraphStyle for word wrapping
     style = ParagraphStyle(
@@ -312,7 +370,7 @@ def generate_pdf(df, total_cost, onboarding_price, ariento_plan):
     return buffer
 
 # Generate PDF Data
-pdf_data = generate_pdf(summary_df, total_cost, onboarding_price, ariento_plan)
+pdf_data = generate_pdf(summary_df, total_cost, onboarding_price, ariento_plan, monthly_recurring_cost, annual_payment)
 
 # Download Button for PDF
 st.download_button(
