@@ -223,7 +223,7 @@ st.download_button(
 )
 
 # Generate PDF Function
-def generate_pdf(df, total_cost):
+def generate_pdf(df, total_cost, onboarding_price, ariento_plan):
     buffer = BytesIO()
     pdf = SimpleDocTemplate(buffer, pagesize=letter)
     elements = []
@@ -255,8 +255,15 @@ def generate_pdf(df, total_cost):
     current_datetime = datetime.datetime.now().strftime('%B %d, %Y %H:%M:%S')
     elements.append(Paragraph(f"Date and Time: {current_datetime}", getSampleStyleSheet()['Normal']))
 
+    # Add Ariento Plan
+    elements.append(Paragraph(f"<strong>Ariento Plan:</strong> {ariento_plan}", getSampleStyleSheet()['Normal']))
+
     # Add Total Cost
     elements.append(Paragraph(f"Total Cost: ${total_cost:.2f}", getSampleStyleSheet()['Heading2']))
+
+    # Calculate Monthly Recurring Cost
+    monthly_recurring_cost = total_cost - onboarding_price
+    elements.append(Paragraph(f"Monthly Recurring Cost: ${monthly_recurring_cost:.2f}", getSampleStyleSheet()['Normal']))
 
     # Define a ParagraphStyle for word wrapping
     style = ParagraphStyle(
@@ -265,8 +272,8 @@ def generate_pdf(df, total_cost):
         fontSize=10,
         leading=12,
         wordWrap="LTR",
-
     )
+
     # Format the table data with wrapped items
     table_data = [list(df.columns)]  # Header row
     for row in df.values.tolist():
@@ -305,7 +312,7 @@ def generate_pdf(df, total_cost):
     return buffer
 
 # Generate PDF Data
-pdf_data = generate_pdf(summary_df, total_cost)
+pdf_data = generate_pdf(summary_df, total_cost, onboarding_price, ariento_plan)
 
 # Download Button for PDF
 st.download_button(
