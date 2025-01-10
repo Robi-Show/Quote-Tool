@@ -10,6 +10,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib import colors
+import re
 
 # Load Excel File from GitHub
 def load_data():
@@ -46,6 +47,13 @@ st.markdown('<p style="font-family: Arial; font-size: 12pt; line-height: 1.15; c
 # Add Section Separator
 def section_separator():
     st.markdown('<hr style="border: 1px solid #E8A33D;">', unsafe_allow_html=True)
+
+# Add Company Name Input
+company_name = st.text_input("Enter Company Name")
+
+# Validate Company Name for File Name
+def sanitize_filename(name):
+    return re.sub(r'[^a-zA-Z0-9_\-]', '_', name)
 
 # Step 1: Select Ariento Plan
 st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Ariento Licenses</h2>', unsafe_allow_html=True)
@@ -230,7 +238,7 @@ st.download_button(
 )
 
 # Generate PDF Function
-def generate_pdf(df):
+def generate_pdf(df, company_name):
     buffer = BytesIO()
     pdf = SimpleDocTemplate(buffer, pagesize=letter)
     elements = []
@@ -259,6 +267,9 @@ def generate_pdf(df):
     except Exception as e:
         elements.append(Paragraph(f"Error loading logo: {str(e)}", getSampleStyleSheet()['Normal']))
 
+    # Add Company Name
+    elements.append(Paragraph(f"Company: {company_name}", getSampleStyleSheet()['Normal']))
+    
     # Add Date and Time
     current_datetime = datetime.datetime.now().strftime('%B %d, %Y %H:%M:%S')
     elements.append(Paragraph(f"Date and Time: {current_datetime}", getSampleStyleSheet()['Normal']))
@@ -314,12 +325,19 @@ def generate_pdf(df):
     return buffer
 
 # Generate PDF Data
-pdf_data = generate_pdf(summary_df)
+pdf_data = generate_pdf(summary_df, company_name)
+
+# Format the PDF file name
+if company_name:
+    sanitized_company_name = sanitize_filename(company_name)
+    pdf_file_name = f"{sanitized_company_name}_Quote_{datetime.datetime.now().strftime('%Y-%m-%d')}.pdf"
+else:
+    pdf_file_name = f"Quote_{datetime.datetime.now().strftime('%Y-%m-%d')}.pdf"
 
 # Download Button for PDF
 st.download_button(
     label="Download Summary as PDF",
     data=pdf_data,
-    file_name="summary_table.pdf",
+    file_name=pdf_file_name,
     mime="application/pdf"
 )
