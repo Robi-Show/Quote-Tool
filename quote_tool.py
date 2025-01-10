@@ -171,11 +171,17 @@ microsoft_cost = sum(
     ) for license, quantity in microsoft_seats.items()
 )
 
+# Check if the selected plan requires annual billing for Microsoft licenses
+if ariento_plan in ["Turnkey CMMC Level 2 Plan (GCC-High)", "Turnkey CMMC Level 3 Plan (GCC-High)"]:
+    billing_period = "Microsoft/Other License Costs (Annual):"
+else:
+    billing_period = "Monthly Microsoft/Other License Costs (Recurring):"
+
 # Display Separate Costs
 st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Separate Costs</h2>', unsafe_allow_html=True)
 st.write(f"### Ariento Onboarding (One-Time): {onboarding_price if onboarding_price == 'Not Required' else f'${onboarding_price:.2f}'}")
 st.write(f"### Monthly Ariento Cost (Recurring): ${ariento_cost:.2f}")
-st.write(f"### Monthly Microsoft/Other License Costs (Recurring): ${microsoft_cost:.2f}")
+st.write(f"### {billing_period} ${microsoft_cost:.2f}")
 
 # Summary Table
 st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Summary of Selected Items</h2>', unsafe_allow_html=True)
@@ -277,7 +283,7 @@ def generate_pdf(df, company_name):
     # Add Separate Costs
     elements.append(Paragraph(f"Ariento Onboarding (One-Time): {onboarding_price if onboarding_price == 'Not Required' else f'${onboarding_price:.2f}'}", getSampleStyleSheet()['Heading2']))
     elements.append(Paragraph(f"Monthly Ariento Cost (Recurring): ${ariento_cost:.2f}", getSampleStyleSheet()['Heading2']))
-    elements.append(Paragraph(f"Monthly Microsoft/Other License Costs (Recurring): ${microsoft_cost:.2f}", getSampleStyleSheet()['Heading2']))
+    elements.append(Paragraph(f"{billing_period} ${microsoft_cost:.2f}", getSampleStyleSheet()['Heading2']))
 
     # Define a ParagraphStyle for word wrapping
     style = ParagraphStyle(
