@@ -150,10 +150,10 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-if ariento_plan == "Enclave One":
+if ariento_plan in ["Enclave One (GCC)", "Enclave One (GCC-H)"]:
     onboarding_price = "Not Required"
     onboarding_type = "Not Required"
-    st.write(f"Onboarding Price: {onboarding_price}")
+    st.write(f"Onboarding Price: Not Required")
 else:
     onboarding_type = st.selectbox(
         "Select Onboarding Payment Type", 
@@ -218,7 +218,7 @@ raw_microsoft_cost = sum(
     ) for lic, quantity in microsoft_seats.items()
 )
 
-if ariento_plan == "Enclave One":
+if ariento_plan == "Enclave One (GCC-H)":
     ariento_cost_label = "Annual Ariento Cost (Up Front)"
     microsoft_cost_label = "Annual Microsoft License Costs (Up Front)"
 else:
