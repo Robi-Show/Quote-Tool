@@ -11,10 +11,12 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 import re
 
-# Custom CSS: make select boxes wider (min-width 600px)
+# Custom CSS to widen select boxes
 st.markdown("""
     <style>
-    .stSelectbox > div > div > div { min-width: 600px; }
+    .stSelectbox > div > div > div {
+        min-width: 600px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -22,7 +24,7 @@ st.markdown("""
 # Data Loading Functions
 # ----------------------------------------
 def load_data():
-    # Load Ariento Pricing data from GitHub
+    # Load Ariento Pricing data
     ariento_url = "https://raw.githubusercontent.com/Robi-Show/Quote-Tool/main/Ariento%20Pricing%202025.xlsx"
     response = requests.get(ariento_url)
     if response.status_code != 200:
@@ -36,7 +38,7 @@ def load_data():
         st.error(f"Missing sheet or column in Ariento Pricing file: {e}")
         st.stop()
 
-    # Load Service Catalogue data from GitHub
+    # Load Service Catalogue data
     service_catalog_url = "https://raw.githubusercontent.com/Robi-Show/Quote-Tool/main/Service+Catalogue.xlsx"
     response_service = requests.get(service_catalog_url)
     if response_service.status_code != 200:
@@ -45,13 +47,20 @@ def load_data():
     service_file = BytesIO(response_service.content)
     try:
         all_sheets = pd.read_excel(service_file, sheet_name=None)
-        normalized_sheets = {k.strip().lower(): v for k, v in all_sheets.items()}
-        # Only load Cisco Meraki and M365 sheets
-        cisco_meraki = normalized_sheets.get("cisco meraki")
-        m365 = normalized_sheets.get("m365")
-        if cisco_meraki is None or m365 is None:
-            st.error("One or more required sheets (Cisco Meraki, M365) not found in Service+Catalogue.xlsx")
+        available_sheet_names = list(all_sheets.keys())
+        cisco_meraki = None
+        m365_sheet = None
+        # Remove spaces and lowercase sheet names for robust matching
+        for sheet_name, df in all_sheets.items():
+            lower_name = sheet_name.lower().replace(" ", "")
+            if "ciscomeraki" in lower_name:
+                cisco_meraki = df
+            if "m365" in lower_name:
+                m365_sheet = df
+        if cisco_meraki is None or m365_sheet is None:
+            st.error("One or more required sheets (Cisco Meraki, M365) not found in Service+Catalogue.xlsx. Available sheets: " + ", ".join(available_sheet_names))
             st.stop()
+        m365 = m365_sheet
     except Exception as e:
         st.error(f"Error loading Service Catalogue Excel file: {e}")
         st.stop()
@@ -69,14 +78,14 @@ def load_data():
         return df
 
     cisco_meraki = filter_sheet(cisco_meraki, ["Price"])
-    m365 = filter_sheet(m365, ["Billing Cycle", "Term Commitment", "Price"])
+    # For M365, use "Term Commit" exactly as in the Excel file.
+    m365 = filter_sheet(m365, ["Billing Cycle", "Term Commit", "Price"])
     if "Segment" in m365.columns:
         m365 = m365[~m365["Segment"].isin(["Education", "Charity", "GCC-High GOV ONLY"])]
     
     return ariento_plans, license_types, cisco_meraki, m365
 
 def get_default_segment(plan):
-    # If plan contains "GCC-H" or "GCCH", return "GCC-High NON GOV"
     if "GCC-H" in plan or "GCCH" in plan:
         return "GCC-High NON GOV"
     elif "GCC" in plan:
@@ -140,7 +149,6 @@ if business_model != "Third Party Resell":
 else:
     ariento_plan = None
 
-# Build filename prefix using Company Name, Business Model, and current date (YYYYMMDD)
 today_str = datetime.datetime.now().strftime("%Y%m%d")
 if company_name:
     file_prefix = f"{company_name}-{business_model}-{today_str}"
@@ -149,30 +157,34 @@ else:
 
 # ----------------------------------------
 # Ariento Licenses Section (Hidden if Third Party Resell)
-# Add Ariento Billing Cycle radio button.
-# For Enclave One, if plan contains "GCC-H" then force Annual; 
-# For Custom Enclave even with GCC-H, allow both.
-# Also, note: Neither Enclave One (GCC) nor (GCC-H) require Onboarding.
+# Billing Cycle: For Enclave One with "GCC-H" force Annual; else allow both.
+# Add Tooltip link "See Types"
 # ----------------------------------------
 if business_model != "Third Party Resell":
     st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Ariento Licenses</h2>', unsafe_allow_html=True)
-    if business_model == "Enclave One" and ariento_plan is not None and ("GCC-H" in ariento_plan or "GCCH" in ariento_plan):
+    if business_model == "Enclave One" and ariento_plan and ("GCC-H" in ariento_plan or "GCCH" in ariento_plan):
         ariento_billing_options = ["Annual"]
     else:
         ariento_billing_options = ["Monthly", "Annual"]
     ariento_billing = st.radio("Ariento Billing Cycle", options=ariento_billing_options, index=0, key="ariento_billing")
     filtered_licenses = license_types[license_types["Plan"] == ariento_plan]
-    st.write("### Seat Types")
+    
+    # Set up the tooltip link based on business model
+    if business_model in ["Custom Enclave", "MSSP"]:
+        see_types_link = '<a href="https://www.ariento.com/user-types/" target="_blank" title="See Types">See Types</a>'
+    elif business_model == "Enclave One":
+        see_types_link = '<a href="https://www.ariento.com/enclave-one-user-types" target="_blank" title="See Types">See Types</a>'
+    else:
+        see_types_link = ""
+    st.markdown(f"<strong>Select a Seat Type</strong> {see_types_link}", unsafe_allow_html=True)
+    
     seat_types = {}
     seat_type_options = filtered_licenses["Seat Type"].unique()
     while True:
-        cols = st.columns(2)
-        with cols[0]:
-            seat_type = st.selectbox("Select a Seat Type", ["Select Seat Type"] + list(seat_type_options), key=f"seat_type_{len(seat_types)}")
+        seat_type = st.selectbox("", ["Select Seat Type"] + list(seat_type_options), key=f"seat_type_{len(seat_types)}")
         if seat_type == "Select Seat Type" or seat_type == "":
             break
-        with cols[1]:
-            quantity = st.number_input(f"Quantity for {seat_type}", min_value=0, value=1, key=f"seat_qty_{len(seat_types)}")
+        quantity = st.number_input(f"Quantity for {seat_type}", min_value=0, value=1, key=f"seat_qty_{len(seat_types)}")
         if quantity > 0:
             price = filtered_licenses.loc[filtered_licenses["Seat Type"] == seat_type, "Price"].values[0]
             cost = quantity * price
@@ -182,80 +194,97 @@ else:
     seat_types = {}
 
 # ----------------------------------------
-# Service Catalogue Licenses Section (Always Visible)
-# Reordered: M365 (expander), then Cisco Meraki (expander)
+# M365 Section (same font as Ariento Licenses)
 # ----------------------------------------
-with st.expander("M365 Licenses"):
-    if business_model != "Third Party Resell":
-        default_segment = get_default_segment(ariento_plan)
-    else:
-        default_segment = None
-    # For M365: if Ariento Plan contains "GCC-H", force Term/Billing to Annual.
-    if ariento_plan is not None and ("GCC-H" in ariento_plan or "GCCH" in ariento_plan):
-        m365_term_options = ["Annual"]
-        m365_billing_options = ["Annual"]
-    else:
-        m365_term_options = ["Annual", "Monthly"]
-        m365_billing_options = ["Annual", "Monthly"]
-    col1, col2 = st.columns(2)
-    with col1:
-        m365_term = st.radio("M365 Term Commitment", options=m365_term_options, key="m365_term")
-    with col2:
-        m365_billing = st.radio("M365 Billing Cycle", options=m365_billing_options, key="m365_billing")
-    if default_segment and "Segment" in m365.columns:
-        m365_filtered = m365[m365["Segment"].astype(str).str.strip() == default_segment]
-    else:
-        m365_filtered = m365.copy()
-    if "Term Commitment" in m365_filtered.columns and "Billing Cycle" in m365_filtered.columns:
-        m365_filtered = m365_filtered[
-            (m365_filtered["Term Commitment"].astype(str).str.strip() == m365_term) &
-            (m365_filtered["Billing Cycle"].astype(str).str.strip() == m365_billing)
-        ]
-    m365_options = m365_filtered["SkuTitle"].unique()
-    m365_selections = {}
-    m365_row = 0
-    while True:
-        cols = st.columns(2)
-        with cols[0]:
-            m365_license = st.selectbox("Select an M365 License", ["Select License"] + list(m365_options), key=f"m365_license_{m365_row}")
-        if m365_license == "Select License" or m365_license == "":
-            break
-        with cols[1]:
-            quantity = st.number_input(f"Quantity for {m365_license}", min_value=0, value=1, key=f"m365_qty_{m365_row}")
-        if quantity > 0:
-            price = m365_filtered.loc[m365_filtered["SkuTitle"] == m365_license, "Price"].values[0]
-            cost = quantity * price
-            st.write(f"Price: ${price:.2f} | Quantity: {quantity} | Cost: ${cost:.2f}")
-            m365_selections[m365_license] = quantity
-        m365_row += 1
+st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">M365 Licenses</h2>', unsafe_allow_html=True)
+if business_model != "Third Party Resell":
+    default_segment = get_default_segment(ariento_plan)
+else:
+    default_segment = None
 
-with st.expander("Cisco Meraki Licenses"):
-    col1, col2 = st.columns(2)
-    with col1:
-        cm_term = st.radio("Cisco Meraki Term Commitment", options=["Annual", "Monthly"], key="cm_term")
-    with col2:
-        cm_billing = st.radio("Cisco Meraki Billing Cycle", options=["Annual", "Monthly"], key="cm_billing")
-    meraki_options = cisco_meraki["SKU"].unique()
-    meraki_selections = {}
-    meraki_row = 0
-    while True:
-        cols = st.columns(2)
-        with cols[0]:
-            meraki_license = st.selectbox("Select a Cisco Meraki License", ["Select License"] + list(meraki_options), key=f"meraki_license_{meraki_row}")
-        if meraki_license == "Select License" or meraki_license == "":
-            break
-        with cols[1]:
-            quantity = st.number_input(f"Quantity for {meraki_license}", min_value=0, value=1, key=f"meraki_qty_{meraki_row}")
-        if quantity > 0:
-            price = cisco_meraki.loc[cisco_meraki["SKU"] == meraki_license, "Price"].values[0]
-            cost = quantity * price
+if ariento_plan and ("GCC-H" in ariento_plan or "GCCH" in ariento_plan):
+    m365_term_options = ["Annual"]
+    m365_billing_options = ["Annual"]
+else:
+    m365_term_options = ["Annual", "Monthly"]
+    m365_billing_options = ["Annual", "Monthly"]
+
+col_m365_1, col_m365_2 = st.columns(2)
+with col_m365_1:
+    m365_term = st.radio("M365 Term Commitment", options=m365_term_options, index=0, key="m365_term")
+with col_m365_2:
+    m365_billing = st.radio("M365 Billing Cycle", options=m365_billing_options, index=0, key="m365_billing")
+
+if default_segment:
+    m365_filtered = m365[m365["Segment"].astype(str).str.strip() == default_segment]
+else:
+    m365_filtered = m365.copy()
+
+m365_filtered = m365_filtered[
+    (m365_filtered["Term Commit"].astype(str).str.strip() == m365_term) &
+    (m365_filtered["Billing Cycle"].astype(str).str.strip() == m365_billing)
+]
+
+m365_options = m365_filtered["SkuTitle"].unique()
+m365_selections = []
+while True:
+    cols = st.columns(2)
+    with cols[0]:
+        selected_sku = st.selectbox("Select an M365 License", ["Select License"] + list(m365_options), key=f"m365_sku_{len(m365_selections)}")
+    if selected_sku == "Select License" or selected_sku == "":
+        break
+    with cols[1]:
+        quantity = st.number_input(f"Quantity for {selected_sku}", min_value=0, value=1, key=f"m365_qty_{len(m365_selections)}")
+    if quantity > 0:
+        row_match = m365_filtered[m365_filtered["SkuTitle"] == selected_sku]
+        if not row_match.empty:
+            price = row_match["Price"].values[0]
+            productID = row_match["ProductId"].values[0]
+            skuId = row_match["SkuId"].values[0]
+            cost = price * quantity
             st.write(f"Price: ${price:.2f} | Quantity: {quantity} | Cost: ${cost:.2f}")
-            meraki_selections[meraki_license] = quantity
-        meraki_row += 1
+            m365_selections.append({
+                "SkuTitle": selected_sku,
+                "ProductID": productID,
+                "SkuId": skuId,
+                "Price": price,
+                "Quantity": quantity
+            })
+        else:
+            st.warning("No matching row found for this SkuTitle with the selected Term/Billing combination.")
 
 # ----------------------------------------
-# Onboarding Section (placed below the expanders)
-# For Enclave One (both GCC and GCC-H) onboarding is Not Required.
+# Cisco Meraki Section (same font as Ariento Licenses)
+# ----------------------------------------
+st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Cisco Meraki Licenses</h2>', unsafe_allow_html=True)
+meraki_options = cisco_meraki["Description"].unique()
+meraki_selections = []
+while True:
+    cols = st.columns(2)
+    with cols[0]:
+        selected_desc = st.selectbox("Select a Cisco Meraki License (by Description)", ["Select License"] + list(meraki_options), key=f"meraki_desc_{len(meraki_selections)}")
+    if selected_desc == "Select License" or selected_desc == "":
+        break
+    with cols[1]:
+        quantity = st.number_input(f"Quantity for {selected_desc}", min_value=0, value=1, key=f"meraki_qty_{len(meraki_selections)}")
+    if quantity > 0:
+        row_match = cisco_meraki[cisco_meraki["Description"] == selected_desc]
+        if not row_match.empty:
+            price = row_match["Price"].values[0]
+            sku_val = row_match["SKU"].values[0]
+            cost = price * quantity
+            st.write(f"Price: ${price:.2f} | Quantity: {quantity} | Cost: ${cost:.2f}")
+            meraki_selections.append({
+                "Description": selected_desc,
+                "SKU": sku_val,
+                "Price": price,
+                "Quantity": quantity
+            })
+        else:
+            st.warning("No matching row found for this description.")
+
+# ----------------------------------------
+# Onboarding Section (same font as Ariento Licenses)
 # ----------------------------------------
 if business_model != "Third Party Resell":
     st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Onboarding</h2>', unsafe_allow_html=True)
@@ -271,11 +300,17 @@ if business_model != "Third Party Resell":
             onboarding_price = st.number_input("Enter Onboarding Price", min_value=0.0, value=3000.0)
         else:
             grouping_one_total = sum(
-                quantity * (filtered_licenses.loc[filtered_licenses["Seat Type"] == seat, "Price"].values[0]
-                            if not filtered_licenses.loc[filtered_licenses["Seat Type"] == seat, "Price"].empty else 0.0)
-                for seat, quantity in seat_types.items()
+                qty * (license_types.loc[
+                    (license_types["Plan"] == ariento_plan) & (license_types["Seat Type"] == seat),
+                    "Price"
+                ].values[0] if not license_types.loc[
+                    (license_types["Plan"] == ariento_plan) & (license_types["Seat Type"] == seat),
+                    "Price"
+                ].empty else 0.0)
+                for seat, qty in seat_types.items()
             )
-            onboarding_price = max(grouping_one_total * 1, 3000.00)
+            raw_onboarding = max(2 * grouping_one_total, 3000)
+            onboarding_price = raw_onboarding
         st.write(f"Onboarding Price: {onboarding_price}")
 else:
     onboarding_price = 0
@@ -293,54 +328,67 @@ else:
     discount_percentage = 0.0
 
 # ----------------------------------------
-# Cost Calculation
+# Final Cost Calculation
 # ----------------------------------------
 if business_model != "Third Party Resell":
-    raw_ariento_cost = sum(
-        quantity * (filtered_licenses.loc[filtered_licenses["Seat Type"] == seat, "Price"].values[0]
-                    if not filtered_licenses.loc[filtered_licenses["Seat Type"] == seat, "Price"].empty else 0.0)
-        for seat, quantity in seat_types.items()
+    monthly_ariento_cost = sum(
+        qty * (license_types.loc[
+            (license_types["Plan"] == ariento_plan) & (license_types["Seat Type"] == seat),
+            "Price"
+        ].values[0] if not license_types.loc[
+            (license_types["Plan"] == ariento_plan) & (license_types["Seat Type"] == seat),
+            "Price"
+        ].empty else 0.0)
+        for seat, qty in seat_types.items()
     )
+    if ariento_billing == "Annual":
+        raw_ariento_cost = 12 * monthly_ariento_cost
+    else:
+        raw_ariento_cost = monthly_ariento_cost
 else:
     raw_ariento_cost = 0
 
 raw_m365_cost = sum(
-    quantity * m365_filtered.loc[m365_filtered["SkuTitle"] == lic, "Price"].values[0]
-    for lic, quantity in m365_selections.items()
+    msel["Price"] * msel["Quantity"] for msel in m365_selections
 ) if m365_selections else 0
 
 raw_meraki_cost = sum(
-    quantity * cisco_meraki.loc[cisco_meraki["SKU"] == sku, "Price"].values[0]
-    for sku, quantity in meraki_selections.items()
+    msel["Price"] * msel["Quantity"] for msel in meraki_selections
 ) if meraki_selections else 0
 
 microsoft_cost = raw_m365_cost
 service_cost = raw_meraki_cost
 
-# Apply discount only to Ariento Licenses and Onboarding
+if business_model != "Third Party Resell" and business_model != "Enclave One":
+    raw_onboarding = max(2 * raw_ariento_cost / (12 if ariento_billing == "Annual" else 1), 3000)
+else:
+    raw_onboarding = 0
+
 if discount_option != "No Discount":
     discount_ariento = discount_percentage * raw_ariento_cost
-    if onboarding_price != "Not Required" and isinstance(onboarding_price, (int, float)):
-        discount_onboarding = discount_percentage * onboarding_price
-        new_onboarding_price = max(onboarding_price - discount_onboarding, 3000)
+    new_ariento_cost = raw_ariento_cost - discount_ariento
+
+    if raw_onboarding > 0:
+        discount_onboarding = discount_percentage * raw_onboarding
+        new_onboarding_price = raw_onboarding - discount_onboarding
+        if new_onboarding_price < 3000:
+            new_onboarding_price = 3000
     else:
         discount_onboarding = 0
-        new_onboarding_price = onboarding_price
-    total_discount = discount_ariento + discount_onboarding
-    new_ariento_cost = raw_ariento_cost - discount_ariento
+        new_onboarding_price = raw_onboarding
 else:
     new_ariento_cost = raw_ariento_cost
-    total_discount = 0
-    new_onboarding_price = onboarding_price
+    new_onboarding_price = raw_onboarding
+    discount_ariento = 0
+    discount_onboarding = 0
 
-# Determine Microsoft cost label based on Ariento Plan and M365 Billing Cycle
-if ariento_plan is not None and (("GCC-H" in ariento_plan or "GCCH" in ariento_plan) or (m365_billing == "Annual")):
+if ariento_plan is not None and (( "GCC-H" in ariento_plan or "GCCH" in ariento_plan) or (m365_billing == "Annual")):
     microsoft_label = "Microsoft Licenses Costs (Annual Recurring)"
 else:
     microsoft_label = "Microsoft Licenses Costs (Monthly Recurring)"
 
 # ----------------------------------------
-# Separate Costs Display
+# Display Separate Costs
 # ----------------------------------------
 if new_ariento_cost > 0:
     st.markdown(f"### Ariento Licenses Cost ({ariento_billing} Recurring): ${new_ariento_cost:.2f}")
@@ -350,32 +398,48 @@ if service_cost > 0:
     st.markdown(f"### Service License Costs (Recurring): ${service_cost:.2f}")
 
 # ----------------------------------------
-# Summary Table (Lists all selections)
+# Build Summary Table
 # ----------------------------------------
 st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Summary of Selected Items</h2>', unsafe_allow_html=True)
 data = []
 
 if business_model != "Third Party Resell":
-    for seat, quantity in seat_types.items():
-        price = filtered_licenses.loc[filtered_licenses["Seat Type"] == seat, "Price"].values[0] if not filtered_licenses.loc[filtered_licenses["Seat Type"] == seat, "Price"].empty else 0.0
-        cost = quantity * price
-        data.append(["Ariento License", seat, quantity, f"${price:.2f}", f"${cost:.2f}"])
+    for seat, qty in seat_types.items():
+        price = license_types.loc[
+            (license_types["Plan"] == ariento_plan) & (license_types["Seat Type"] == seat),
+            "Price"
+        ].values[0] if not license_types.loc[
+            (license_types["Plan"] == ariento_plan) & (license_types["Seat Type"] == seat),
+            "Price"
+        ].empty else 0.0
+        cost = qty * price
+        if ariento_billing == "Annual":
+            price = price * 12
+            cost = cost * 12
+        data.append(["Ariento License", seat, qty, f"${price:.2f}", f"${cost:.2f}"])
 
-for lic, quantity in meraki_selections.items():
-    price = cisco_meraki.loc[cisco_meraki["SKU"] == lic, "Price"].values[0]
-    cost = quantity * price
-    data.append(["Cisco Meraki", lic, quantity, f"${price:.2f}", f"${cost:.2f}"])
+for msel in m365_selections:
+    stitle = msel["SkuTitle"]
+    productID = msel["ProductID"]
+    skuId = msel["SkuId"]
+    price = msel["Price"]
+    qty = msel["Quantity"]
+    cost = price * qty
+    data.append(["M365", f"{stitle} (ProductId: {productID}, SkuId: {skuId})", qty, f"${price:.2f}", f"${cost:.2f}"])
 
-for lic, quantity in m365_selections.items():
-    price = m365_filtered.loc[m365_filtered["SkuTitle"] == lic, "Price"].values[0]
-    cost = quantity * price
-    data.append(["M365", lic, quantity, f"${price:.2f}", f"${cost:.2f}"])
+for msel in meraki_selections:
+    price = msel["Price"]
+    qty = msel["Quantity"]
+    cost = price * qty
+    data.append(["Cisco Meraki", f"{msel['Description']} (SKU: {msel['SKU']})", qty, f"${price:.2f}", f"${cost:.2f}"])
 
 if business_model != "Third Party Resell" and onboarding_price != "Not Required":
     data.append(["Onboarding", onboarding_type, 1, f"${new_onboarding_price:.2f}", f"${new_onboarding_price:.2f}"])
 
 if discount_option != "No Discount":
-    data.append(["Discount", f"{discount_option} ({discount_percentage*100:.0f}%)", "-", f"-${total_discount:.2f}", f"-${total_discount:.2f}"])
+    data.append(["Discount - Ariento", f"{discount_option} ({discount_percentage*100:.0f}%)", "-", f"-${discount_ariento:.2f}", f"-${discount_ariento:.2f}"])
+    if raw_onboarding > 0:
+        data.append(["Discount - Onboarding", f"{discount_option} ({discount_percentage*100:.0f}%)", "-", f"-${discount_onboarding:.2f}", f"-${discount_onboarding:.2f}"])
 
 summary_df = pd.DataFrame(data, columns=["Category", "Item", "Quantity", "Price Per Unit", "Total Cost"])
 summary_df = summary_df.astype(str)
@@ -397,13 +461,22 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ----------------------------------------
-# CSV and PDF Downloads
+# CSV Download
 # ----------------------------------------
 def convert_df_to_csv(df):
     return df.to_csv(index=False).encode('utf-8')
-csv_data = convert_df_to_csv(summary_df)
-st.download_button(label="Download Summary as CSV", data=csv_data, file_name=f"{sanitize_filename(file_prefix)}_quote.csv", mime="text/csv")
 
+csv_data = convert_df_to_csv(summary_df)
+st.download_button(
+    label="Download Summary as CSV",
+    data=csv_data,
+    file_name=f"{sanitize_filename(file_prefix)}_quote.csv",
+    mime="text/csv"
+)
+
+# ----------------------------------------
+# PDF Generation
+# ----------------------------------------
 def generate_pdf(df, company_name):
     buffer = BytesIO()
     pdf_doc = SimpleDocTemplate(buffer, pagesize=letter)
@@ -437,18 +510,17 @@ def generate_pdf(df, company_name):
     elements.append(Paragraph(f"Date and Time: {current_datetime}", styles['Normal']))
     elements.append(Spacer(1, 12))
     if raw_ariento_cost > 0:
-        # Use the Ariento Billing Cycle selection in the label.
         elements.append(Paragraph(f"Ariento Licenses Cost ({ariento_billing} Recurring): ${new_ariento_cost:.2f}", styles['Heading2']))
     if microsoft_cost > 0:
         elements.append(Paragraph(f"{microsoft_label}: ${microsoft_cost:.2f}", styles['Heading2']))
     if service_cost > 0:
         elements.append(Paragraph(f"Service License Costs (Recurring): ${service_cost:.2f}", styles['Heading2']))
     if business_model != "Third Party Resell" and onboarding_price != "Not Required":
-        onboarding_str = f"${new_onboarding_price:.2f}"
-        elements.append(Paragraph(f"Ariento Onboarding (One-Time): {onboarding_str}", styles['Heading2']))
+        elements.append(Paragraph(f"Ariento Onboarding (One-Time): ${new_onboarding_price:.2f}", styles['Heading2']))
     if discount_option != "No Discount":
-        discount_text = "30 Days Free" if discount_option == "30 Days Free" else ( "10% Discount" if discount_option == "10% Discount" else f"{discount_percentage * 100:.1f}% Discount" )
-        elements.append(Paragraph(f"Discount: {discount_text}", styles['Heading2']))
+        elements.append(Paragraph(f"Discount - Ariento: -${discount_ariento:.2f}", styles['Heading2']))
+        if raw_onboarding > 0:
+            elements.append(Paragraph(f"Discount - Onboarding: -${discount_onboarding:.2f}", styles['Heading2']))
     elements.append(Spacer(1, 12))
     wrap_style = ParagraphStyle(name="WrappedText", fontName="Helvetica", fontSize=10, leading=12, wordWrap="LTR")
     table_data = [list(df.columns)]
