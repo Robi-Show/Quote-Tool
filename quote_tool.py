@@ -331,7 +331,7 @@ else:
 # Final Cost Calculation
 # ----------------------------------------
 if business_model != "Third Party Resell":
-    monthly_ariento_cost = sum(
+    ariento_base_cost = sum(
         qty * (license_types.loc[
             (license_types["Plan"] == ariento_plan) & (license_types["Seat Type"] == seat),
             "Price"
@@ -346,6 +346,7 @@ if business_model != "Third Party Resell":
     else:
         raw_ariento_cost = ariento_base_cost
 else:
+    ariento_base_cost = 0
     raw_ariento_cost = 0
 
 raw_m365_cost = sum(
