@@ -404,20 +404,24 @@ st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Su
 data = []
 
 if business_model != "Third Party Resell":
-    for seat, qty in seat_types.items():
-        # Get the base price from the license_types table
-        price_row = license_types.loc[
+    ariento_base_cost = sum(
+        qty * (license_types.loc[
             (license_types["Plan"] == ariento_plan) & (license_types["Seat Type"] == seat),
             "Price"
-        ]
-        price = price_row.values[0] if not price_row.empty else 0.0
-        # If plan is NOT GCC-H and billing is annual, multiply by 12
-        if ariento_billing == "Annual" and ("GCC-H" not in ariento_plan and "GCCH" not in ariento_plan):
-            display_price = price * 12
-        else:
-            display_price = price
-        cost = qty * display_price
-        data.append(["Ariento License", seat, qty, f"${display_price:.2f}", f"${cost:.2f}"])
+        ].values[0] if not license_types.loc[
+            (license_types["Plan"] == ariento_plan) & (license_types["Seat Type"] == seat),
+            "Price"
+        ].empty else 0.0)
+        for seat, qty in seat_types.items()
+    )
+
+    # Only multiply by 12 if not GCC-H and billing is Annual
+    if ariento_billing == "Annual" and ("GCC-H" not in ariento_plan and "GCCH" not in ariento_plan):
+        raw_ariento_cost = 12 * ariento_base_cost
+    else:
+        raw_ariento_cost = ariento_base_cost
+else:
+    raw_ariento_cost = 0
 
 for msel in m365_selections:
     stitle = msel["SkuTitle"]
