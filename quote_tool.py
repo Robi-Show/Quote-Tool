@@ -359,14 +359,14 @@ elif discount_option == "Percentage Discount":
 else:
     discount_percentage = 0.0
 
-if discount_option != "No Discount":
+if discount_option != "No Discount" and show_onboarding:
     discount_scope = st.radio(
         "Apply Discount To:",
         options=["Ariento Licenses Only", "Ariento Licenses + Onboarding"],
         index=0
     )
 else:
-    discount_scope = None
+    discount_scope = "Ariento Licenses Only"  # Default fallback
 
 # Calculate total discount and apply it proportionally
 if discount_option != "No Discount":
