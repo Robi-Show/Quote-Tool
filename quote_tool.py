@@ -423,22 +423,24 @@ if service_cost > 0:
 st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Summary of Selected Items</h2>', unsafe_allow_html=True)
 data = []
 
+# Ariento Licenses
 if business_model != "Third Party Resell":
     for seat, qty in seat_types.items():
-        # Get the base price from the license_types table
         price_row = license_types.loc[
             (license_types["Plan"] == ariento_plan) & (license_types["Seat Type"] == seat),
             "Price"
         ]
         price = price_row.values[0] if not price_row.empty else 0.0
-        # If plan is NOT GCC-H and billing is annual, multiply by 12
+
         if ariento_billing == "Annual" and ("GCC-H" not in ariento_plan and "GCCH" not in ariento_plan):
             display_price = price * 12
         else:
             display_price = price
+
         cost = qty * display_price
         data.append(["Ariento License", seat, qty, f"${display_price:.2f}", f"${cost:.2f}"])
 
+# M365 Licenses
 for msel in m365_selections:
     stitle = msel["SkuTitle"]
     productID = msel["ProductID"]
@@ -448,20 +450,24 @@ for msel in m365_selections:
     cost = price * qty
     data.append(["M365", f"{stitle} (ProductId: {productID}, SkuId: {skuId})", qty, f"${price:.2f}", f"${cost:.2f}"])
 
+# Cisco Meraki
 for msel in meraki_selections:
     price = msel["Price"]
     qty = msel["Quantity"]
     cost = price * qty
     data.append(["Cisco Meraki", f"{msel['Description']} (SKU: {msel['SKU']})", qty, f"${price:.2f}", f"${cost:.2f}"])
 
+# Onboarding
 if business_model != "Third Party Resell" and show_onboarding:
-    data.append(["Onboarding", onboarding_type, 1, f"${new_onboarding_price:.2f}", f"${new_onboarding_price:.2f}"])
+    data.append(["Onboarding", business_model, 1, f"${new_onboarding_price:.2f}", f"${new_onboarding_price:.2f}"])
 
+# Discounts
 if discount_option != "No Discount":
-    data.append(["Discount - Ariento", f"{discount_option} ({discount_percentage*100:.0f}%)", "-", f"-${discount_ariento:.2f}", f"-${discount_ariento:.2f}"])
-    if raw_onboarding > 0:
-        data.append(["Discount - Onboarding", f"{discount_option} ({discount_percentage*100:.0f}%)", "-", f"-${discount_onboarding:.2f}", f"-${discount_onboarding:.2f}"])
+    data.append(["Discount - Ariento", discount_option, "-", f"-${discount_ariento:.2f}", f"-${discount_ariento:.2f}"])
+    if show_onboarding:
+        data.append(["Discount - Onboarding", discount_option, "-", f"-${discount_onboarding:.2f}", f"-${discount_onboarding:.2f}"])
 
+# Render table
 summary_df = pd.DataFrame(data, columns=["Category", "Item", "Quantity", "Price Per Unit", "Total Cost"])
 summary_df = summary_df.astype(str)
 st.table(summary_df.style.hide(axis='index'))
@@ -536,12 +542,12 @@ def generate_pdf(df, company_name):
         elements.append(Paragraph(f"{microsoft_label}: ${microsoft_cost:.2f}", styles['Heading2']))
     if service_cost > 0:
         elements.append(Paragraph(f"Service License Costs (Recurring): ${service_cost:.2f}", styles['Heading2']))
-    if business_model != "Third Party Resell" and onboarding_price != "Not Required":
-        elements.append(Paragraph(f"Ariento Onboarding (One-Time): ${new_onboarding_price:.2f}", styles['Heading2']))
+    if business_model != "Third Party Resell" and show_onboarding:
+        elements.append(Paragraph(f"{business_model} Onboarding (One-Time): ${new_onboarding_price:.2f}", styles['Heading2']))
     if discount_option != "No Discount":
-        elements.append(Paragraph(f"Discount - Ariento: -${discount_ariento:.2f}", styles['Heading2']))
-        if raw_onboarding > 0:
-            elements.append(Paragraph(f"Discount - Onboarding: -${discount_onboarding:.2f}", styles['Heading2']))
+        elements.append(Paragraph(f"{discount_option} - Ariento: -${discount_ariento:.2f}", styles['Heading2']))
+        if show_onboarding:
+            elements.append(Paragraph(f"{discount_option} - Onboarding: -${discount_onboarding:.2f}", styles['Heading2']))
     elements.append(Spacer(1, 12))
     wrap_style = ParagraphStyle(name="WrappedText", fontName="Helvetica", fontSize=10, leading=12, wordWrap="LTR")
     table_data = [list(df.columns)]
