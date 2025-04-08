@@ -482,7 +482,7 @@ for msel in meraki_selections:
 
 # Onboarding
 if business_model != "Third Party Resell" and show_onboarding:
-    data.append(["Onboarding", business_model, 1, f"${new_onboarding_price:.2f}", f"${new_onboarding_price:.2f}"])
+    data.append(["Onboarding", business_model, 1, f"${onboarding_price:.2f}", f"${onboarding_price:.2f}"])
 
 # Discounts
 if discount_option != "No Discount" and total_discount > 0:
