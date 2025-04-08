@@ -359,24 +359,38 @@ elif discount_option == "Percentage Discount":
 else:
     discount_percentage = 0.0
 
+if discount_option != "No Discount":
+    discount_scope = st.radio(
+        "Apply Discount To:",
+        options=["Ariento Licenses Only", "Ariento Licenses + Onboarding"],
+        index=0
+    )
+else:
+    discount_scope = None
+
 # Calculate total discount and apply it proportionally
 if discount_option != "No Discount":
-    # Total base for discount = ariento + onboarding (if shown)
     discount_base = raw_ariento_cost
-    if show_onboarding:
+    apply_onboarding_discount = False
+
+    if discount_scope == "Ariento Licenses + Onboarding" and show_onboarding:
         discount_base += onboarding_price
+        apply_onboarding_discount = True
 
     total_discount = discount_percentage * discount_base
 
-    # Apply individual discounts to update final values
     discount_ariento = discount_percentage * raw_ariento_cost
     new_ariento_cost = raw_ariento_cost - discount_ariento
 
     if show_onboarding:
-        discount_onboarding = discount_percentage * onboarding_price
-        new_onboarding_price = onboarding_price - discount_onboarding
-        if new_onboarding_price < 3000 and onboarding_type == "One Time Onboarding Payment":
-            new_onboarding_price = 3000
+        if apply_onboarding_discount:
+            discount_onboarding = discount_percentage * onboarding_price
+            new_onboarding_price = onboarding_price - discount_onboarding
+            if new_onboarding_price < 3000 and onboarding_type == "One Time Onboarding Payment":
+                new_onboarding_price = 3000
+        else:
+            discount_onboarding = 0
+            new_onboarding_price = onboarding_price
     else:
         discount_onboarding = 0
         new_onboarding_price = onboarding_price
