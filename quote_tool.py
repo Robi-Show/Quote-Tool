@@ -337,10 +337,18 @@ else:
 # Discount Options (applied only to Ariento Licenses and Onboarding)
 # ----------------------------------------
 st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Discount</h2>', unsafe_allow_html=True)
-discount_option = st.selectbox("Select Discount Option", ["No Discount", "10% Discount", "Percentage Discount"])
+discount_option = st.selectbox("Select Discount Option", ["No Discount", "30 Days Free", "10% Discount", "Percentage Discount"])
+if discount_option == "10% Discount":
+    discount_percentage = 0.10
+elif discount_option == "Percentage Discount":
+    discount_percentage = st.number_input("Enter Discount Percentage", min_value=0.0, max_value=100.0, value=10.0, step=0.1) / 100.0
+else:
+    discount_percentage = 0.0
+
 if discount_option != "No Discount":
-    discount_ariento = discount_percentage * raw_ariento_cost
-    new_ariento_cost = raw_ariento_cost - discount_ariento
+    # Ensure both values exist
+    discount_ariento = discount_percentage * raw_ariento_cost if 'raw_ariento_cost' in locals() else 0
+    new_ariento_cost = raw_ariento_cost - discount_ariento if 'raw_ariento_cost' in locals() else 0
 
     if show_onboarding:
         discount_onboarding = discount_percentage * onboarding_price
@@ -350,13 +358,9 @@ if discount_option != "No Discount":
     else:
         discount_onboarding = 0
         new_onboarding_price = onboarding_price
-elif discount_option == "10% Discount":
-    discount_percentage = 0.10
-elif discount_option == "Percentage Discount":
-    discount_percentage = st.number_input("Enter Discount Percentage", min_value=0.0, max_value=100.0, value=10.0, step=0.1) / 100.0
 else:
-    new_ariento_cost = raw_ariento_cost
-    new_onboarding_price = onboarding_price
+    new_ariento_cost = raw_ariento_cost if 'raw_ariento_cost' in locals() else 0
+    new_onboarding_price = onboarding_price if 'onboarding_price' in locals() else 0
     discount_ariento = 0
     discount_onboarding = 0
 
