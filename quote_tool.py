@@ -405,18 +405,19 @@ data = []
 
 if business_model != "Third Party Resell":
     for seat, qty in seat_types.items():
-        price = license_types.loc[
+        # Get the base price from the license_types table
+        price_row = license_types.loc[
             (license_types["Plan"] == ariento_plan) & (license_types["Seat Type"] == seat),
             "Price"
-        ].values[0] if not license_types.loc[
-            (license_types["Plan"] == ariento_plan) & (license_types["Seat Type"] == seat),
-            "Price"
-        ].empty else 0.0
-        cost = qty * price
-        if ariento_billing == "Annual":
-            price = price * 12
-            cost = cost * 12
-        data.append(["Ariento License", seat, qty, f"${price:.2f}", f"${cost:.2f}"])
+        ]
+        price = price_row.values[0] if not price_row.empty else 0.0
+        # If plan is NOT GCC-H and billing is annual, multiply by 12
+        if ariento_billing == "Annual" and ("GCC-H" not in ariento_plan and "GCCH" not in ariento_plan):
+            display_price = price * 12
+        else:
+            display_price = price
+        cost = qty * display_price
+        data.append(["Ariento License", seat, qty, f"${display_price:.2f}", f"${cost:.2f}"])
 
 for msel in m365_selections:
     stitle = msel["SkuTitle"]
