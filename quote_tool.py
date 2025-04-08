@@ -288,32 +288,31 @@ while True:
 # ----------------------------------------
 if business_model != "Third Party Resell":
     st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Onboarding</h2>', unsafe_allow_html=True)
-    if business_model == "Enclave One":
-        onboarding_type = "Not Required"
-        onboarding_price = "Not Required"
-        st.write("Onboarding Price: Not Required")
-    else:
-        onboarding_type = st.selectbox("Select Onboarding Payment Type", ["One Time Onboarding Payment", "Other", "None"])
-        if onboarding_type == "None":
-            onboarding_price = "Not Required"
-        elif onboarding_type == "Other":
-            onboarding_price = st.number_input("Enter Onboarding Price", min_value=0.0, value=3000.0)
+
+    onboarding_type = st.selectbox("Select Onboarding Payment Type", ["One Time Onboarding Payment", "Other", "None"])
+
+    if onboarding_type == "None":
+        onboarding_price = 0
+        show_onboarding = False
+
+    elif onboarding_type == "Other":
+        onboarding_price = st.number_input("Enter Onboarding Price", min_value=0.0, value=3000.0)
+        show_onboarding = True
+
+    else:  # "One Time Onboarding Payment"
+        if ariento_billing == "Annual":
+            base = ariento_base_cost
         else:
-            grouping_one_total = sum(
-                qty * (license_types.loc[
-                    (license_types["Plan"] == ariento_plan) & (license_types["Seat Type"] == seat),
-                    "Price"
-                ].values[0] if not license_types.loc[
-                    (license_types["Plan"] == ariento_plan) & (license_types["Seat Type"] == seat),
-                    "Price"
-                ].empty else 0.0)
-                for seat, qty in seat_types.items()
-            )
-            raw_onboarding = max(2 * grouping_one_total, 3000)
-            onboarding_price = raw_onboarding
-        st.write(f"Onboarding Price: {onboarding_price}")
+            base = ariento_base_cost * 2  # Approximate monthly logic
+
+        onboarding_price = max(base, 3000)
+        show_onboarding = True
+
+    if show_onboarding:
+        st.write(f"Onboarding Price: ${onboarding_price:,.2f}")
 else:
     onboarding_price = 0
+    show_onboarding = False
 
 # ----------------------------------------
 # Discount Options (applied only to Ariento Licenses and Onboarding)
@@ -369,20 +368,20 @@ if discount_option != "No Discount":
     discount_ariento = discount_percentage * raw_ariento_cost
     new_ariento_cost = raw_ariento_cost - discount_ariento
 
-    if raw_onboarding > 0:
-        discount_onboarding = discount_percentage * raw_onboarding
-        new_onboarding_price = raw_onboarding - discount_onboarding
-        if new_onboarding_price < 3000:
+    if show_onboarding:
+        discount_onboarding = discount_percentage * onboarding_price
+        new_onboarding_price = onboarding_price - discount_onboarding
+        if new_onboarding_price < 3000 and onboarding_type == "One Time Onboarding Payment":
             new_onboarding_price = 3000
     else:
         discount_onboarding = 0
-        new_onboarding_price = raw_onboarding
+        new_onboarding_price = onboarding_price
 else:
     new_ariento_cost = raw_ariento_cost
-    new_onboarding_price = raw_onboarding
+    new_onboarding_price = onboarding_price
     discount_ariento = 0
     discount_onboarding = 0
-
+    
 if ariento_plan is not None and (( "GCC-H" in ariento_plan or "GCCH" in ariento_plan) or (m365_billing == "Annual")):
     microsoft_label = "Microsoft Licenses Costs (Annual Recurring)"
 else:
@@ -435,7 +434,7 @@ for msel in meraki_selections:
     cost = price * qty
     data.append(["Cisco Meraki", f"{msel['Description']} (SKU: {msel['SKU']})", qty, f"${price:.2f}", f"${cost:.2f}"])
 
-if business_model != "Third Party Resell" and onboarding_price != "Not Required":
+if business_model != "Third Party Resell" and show_onboarding:
     data.append(["Onboarding", onboarding_type, 1, f"${new_onboarding_price:.2f}", f"${new_onboarding_price:.2f}"])
 
 if discount_option != "No Discount":
