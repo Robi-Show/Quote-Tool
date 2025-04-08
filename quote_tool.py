@@ -283,6 +283,25 @@ while True:
         else:
             st.warning("No matching row found for this description.")
 
+if business_model != "Third Party Resell":
+    ariento_base_cost = sum(
+        qty * (license_types.loc[
+            (license_types["Plan"] == ariento_plan) & (license_types["Seat Type"] == seat),
+            "Price"
+        ].values[0] if not license_types.loc[
+            (license_types["Plan"] == ariento_plan) & (license_types["Seat Type"] == seat),
+            "Price"
+        ].empty else 0.0)
+        for seat, qty in seat_types.items()
+    )
+    if ariento_billing == "Annual" and ("GCC-H" not in ariento_plan and "GCCH" not in ariento_plan):
+        raw_ariento_cost = 12 * ariento_base_cost
+    else:
+        raw_ariento_cost = ariento_base_cost
+else:
+    ariento_base_cost = 0
+    raw_ariento_cost = 0
+    
 # ----------------------------------------
 # Onboarding Section (same font as Ariento Licenses)
 # ----------------------------------------
@@ -318,35 +337,32 @@ else:
 # Discount Options (applied only to Ariento Licenses and Onboarding)
 # ----------------------------------------
 st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Discount</h2>', unsafe_allow_html=True)
-discount_option = st.selectbox("Select Discount Option", ["No Discount", "30 Days Free", "10% Discount", "Percentage Discount"])
-if discount_option == "10% Discount":
+discount_option = st.selectbox("Select Discount Option", ["No Discount", "10% Discount", "Percentage Discount"])
+if discount_option != "No Discount":
+    discount_ariento = discount_percentage * raw_ariento_cost
+    new_ariento_cost = raw_ariento_cost - discount_ariento
+
+    if show_onboarding:
+        discount_onboarding = discount_percentage * onboarding_price
+        new_onboarding_price = onboarding_price - discount_onboarding
+        if new_onboarding_price < 3000 and onboarding_type == "One Time Onboarding Payment":
+            new_onboarding_price = 3000
+    else:
+        discount_onboarding = 0
+        new_onboarding_price = onboarding_price
+elif discount_option == "10% Discount":
     discount_percentage = 0.10
 elif discount_option == "Percentage Discount":
     discount_percentage = st.number_input("Enter Discount Percentage", min_value=0.0, max_value=100.0, value=10.0, step=0.1) / 100.0
 else:
-    discount_percentage = 0.0
+    new_ariento_cost = raw_ariento_cost
+    new_onboarding_price = onboarding_price
+    discount_ariento = 0
+    discount_onboarding = 0
 
 # ----------------------------------------
 # Final Cost Calculation
 # ----------------------------------------
-if business_model != "Third Party Resell":
-    ariento_base_cost = sum(
-        qty * (license_types.loc[
-            (license_types["Plan"] == ariento_plan) & (license_types["Seat Type"] == seat),
-            "Price"
-        ].values[0] if not license_types.loc[
-            (license_types["Plan"] == ariento_plan) & (license_types["Seat Type"] == seat),
-            "Price"
-        ].empty else 0.0)
-        for seat, qty in seat_types.items()
-    )
-    if ariento_billing == "Annual" and ("GCC-H" not in ariento_plan and "GCCH" not in ariento_plan):
-        raw_ariento_cost = 12 * ariento_base_cost
-    else:
-        raw_ariento_cost = ariento_base_cost
-else:
-    ariento_base_cost = 0
-    raw_ariento_cost = 0
 
 raw_m365_cost = sum(
     msel["Price"] * msel["Quantity"] for msel in m365_selections
