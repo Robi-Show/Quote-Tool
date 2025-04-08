@@ -338,6 +338,7 @@ else:
 # ----------------------------------------
 st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Discount</h2>', unsafe_allow_html=True)
 discount_option = st.selectbox("Select Discount Option", ["No Discount", "30 Days Free", "10% Discount", "Percentage Discount"])
+
 if discount_option == "10% Discount":
     discount_percentage = 0.10
 elif discount_option == "Percentage Discount":
@@ -345,10 +346,18 @@ elif discount_option == "Percentage Discount":
 else:
     discount_percentage = 0.0
 
+# Calculate total discount and apply it proportionally
 if discount_option != "No Discount":
-    # Ensure both values exist
-    discount_ariento = discount_percentage * raw_ariento_cost if 'raw_ariento_cost' in locals() else 0
-    new_ariento_cost = raw_ariento_cost - discount_ariento if 'raw_ariento_cost' in locals() else 0
+    # Total base for discount = ariento + onboarding (if shown)
+    discount_base = raw_ariento_cost
+    if show_onboarding:
+        discount_base += onboarding_price
+
+    total_discount = discount_percentage * discount_base
+
+    # Apply individual discounts to update final values
+    discount_ariento = discount_percentage * raw_ariento_cost
+    new_ariento_cost = raw_ariento_cost - discount_ariento
 
     if show_onboarding:
         discount_onboarding = discount_percentage * onboarding_price
@@ -359,10 +368,11 @@ if discount_option != "No Discount":
         discount_onboarding = 0
         new_onboarding_price = onboarding_price
 else:
-    new_ariento_cost = raw_ariento_cost if 'raw_ariento_cost' in locals() else 0
-    new_onboarding_price = onboarding_price if 'onboarding_price' in locals() else 0
+    total_discount = 0
     discount_ariento = 0
     discount_onboarding = 0
+    new_ariento_cost = raw_ariento_cost
+    new_onboarding_price = onboarding_price
 
 # ----------------------------------------
 # Final Cost Calculation
@@ -462,10 +472,8 @@ if business_model != "Third Party Resell" and show_onboarding:
     data.append(["Onboarding", business_model, 1, f"${new_onboarding_price:.2f}", f"${new_onboarding_price:.2f}"])
 
 # Discounts
-if discount_option != "No Discount":
-    data.append(["Discount - Ariento", discount_option, "-", f"-${discount_ariento:.2f}", f"-${discount_ariento:.2f}"])
-    if show_onboarding:
-        data.append(["Discount - Onboarding", discount_option, "-", f"-${discount_onboarding:.2f}", f"-${discount_onboarding:.2f}"])
+if discount_option != "No Discount" and total_discount > 0:
+    data.append(["Discount", discount_option, "-", f"-${total_discount:.2f}", f"-${total_discount:.2f}"])
 
 # Render table
 summary_df = pd.DataFrame(data, columns=["Category", "Item", "Quantity", "Price Per Unit", "Total Cost"])
@@ -544,10 +552,6 @@ def generate_pdf(df, company_name):
         elements.append(Paragraph(f"Service License Costs (Recurring): ${service_cost:.2f}", styles['Heading2']))
     if business_model != "Third Party Resell" and show_onboarding:
         elements.append(Paragraph(f"{business_model} Onboarding (One-Time): ${new_onboarding_price:.2f}", styles['Heading2']))
-    if discount_option != "No Discount":
-        elements.append(Paragraph(f"{discount_option} - Ariento: -${discount_ariento:.2f}", styles['Heading2']))
-        if show_onboarding:
-            elements.append(Paragraph(f"{discount_option} - Onboarding: -${discount_onboarding:.2f}", styles['Heading2']))
     elements.append(Spacer(1, 12))
     wrap_style = ParagraphStyle(name="WrappedText", fontName="Helvetica", fontSize=10, leading=12, wordWrap="LTR")
     table_data = [list(df.columns)]
