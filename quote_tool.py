@@ -220,9 +220,22 @@ if default_segment:
 else:
     m365_filtered = m365.copy()
 
+# Normalize term and billing values from Excel to match your UI selections
+m365_filtered["Term Commit"] = m365_filtered["Term Commit"].astype(str).str.strip().replace({
+    "Month": "Monthly",
+    "month": "Monthly",
+    "Annual": "Annual"
+})
+m365_filtered["Billing Cycle"] = m365_filtered["Billing Cycle"].astype(str).str.strip().replace({
+    "Month": "Monthly",
+    "month": "Monthly",
+    "Annual": "Annual"
+})
+
+# Now filter based on UI selections
 m365_filtered = m365_filtered[
-    (m365_filtered["Term Commit"].astype(str).str.strip() == m365_term) &
-    (m365_filtered["Billing Cycle"].astype(str).str.strip() == m365_billing)
+    (m365_filtered["Term Commit"] == m365_term) &
+    (m365_filtered["Billing Cycle"] == m365_billing)
 ]
 
 m365_options = m365_filtered["SkuTitle"].unique()
