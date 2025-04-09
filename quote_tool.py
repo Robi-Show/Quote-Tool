@@ -578,7 +578,7 @@ def generate_pdf(df, company_name):
     if service_cost > 0:
         elements.append(Paragraph(f"Service License Costs (Recurring): ${service_cost:.2f}", styles['Heading2']))
     if business_model != "Third Party Resell" and show_onboarding:
-        elements.append(Paragraph(f"{business_model} Onboarding (One-Time): ${new_onboarding_price:.2f}", styles['Heading2']))
+        elements.append(Paragraph(f"{business_model} Onboarding (One-Time): ${onboarding_price:.2f}", styles['Heading2']))
     elements.append(Spacer(1, 12))
     wrap_style = ParagraphStyle(name="WrappedText", fontName="Helvetica", fontSize=10, leading=12, wordWrap="LTR")
     table_data = [list(df.columns)]
