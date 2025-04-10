@@ -576,7 +576,7 @@ def generate_pdf(df, company_name):
     if microsoft_cost > 0:
         elements.append(Paragraph(f"{microsoft_label}: ${microsoft_cost:.2f}", styles['Heading2']))
     if service_cost > 0:
-        elements.append(Paragraph(f"Service License Costs (Recurring): ${service_cost:.2f}", styles['Heading2']))
+        elements.append(Paragraph(f"Meraki w/ License Costs: ${service_cost:.2f}", styles['Heading2']))
     if business_model != "Third Party Resell" and show_onboarding:
         elements.append(Paragraph(f"{business_model} Onboarding (One-Time): ${onboarding_price:.2f}", styles['Heading2']))
     elements.append(Spacer(1, 12))
