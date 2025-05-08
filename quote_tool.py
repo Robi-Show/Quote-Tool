@@ -208,7 +208,7 @@ else:
 if business_model == "Resale":
     st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Third Party Licenses</h2>', unsafe_allow_html=True)
     resale_selections = []
-    vendor_options = resale_sheet["Vendor"].dropna().unique()
+    vendor_options = resale_sheet[Vendor].dropna().unique()
 
     while True:
         cols = st.columns(3)
@@ -216,17 +216,17 @@ if business_model == "Resale":
             vendor = st.selectbox("Select Vendor", ["Select Vendor"] + list(vendor_options), key=f"resale_vendor_{len(resale_selections)}")
         if vendor == "Select Vendor" or vendor == "":
             break
-        vendor_items = resale_sheet[resale_sheet["Vendor"] == vendor]["Item"].dropna().unique()
+        vendor_items = resale_sheet[resale_sheet[Vendor] == vendor][SKU].dropna().unique()
         with cols[1]:
-            item = st.selectbox("Select Item", ["Select Item"] + list(vendor_items), key=f"resale_item_{len(resale_selections)}")
+            item = st.selectbox("Select Item", [SKU] + list(vendor_items), key=f"resale_item_{len(resale_selections)}")
         if item == "Select Item" or item == "":
             break
         with cols[2]:
             quantity = st.number_input(f"Quantity for {vendor} - {item}", min_value=0, value=1, key=f"resale_qty_{len(resale_selections)}")
         if quantity > 0:
-            row_match = resale_sheet[(resale_sheet["Vendor"] == vendor) & (resale_sheet["Item"] == item)]
+            row_match = resale_sheet[(resale_sheet[Vendor] == vendor) & (resale_sheet[SKU] == item)]
             if not row_match.empty:
-                price = row_match["Price"].values[0]
+                price = row_match[Price].values[0]
                 cost = price * quantity
                 st.write(f"Price: ${price:.2f} | Quantity: {quantity} | Cost: ${cost:.2f}")
                 resale_selections.append({
