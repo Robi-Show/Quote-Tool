@@ -128,7 +128,7 @@ if business_model == "Enclave One":
 elif business_model == "Custom Enclave":
     custom_segment = st.selectbox("Select Custom Enclave Segment", ["Commercial", "GCC", "GCC-H"])
     if custom_segment == "Commercial":
-        custom_option = st.selectbox("Select Option", ["Professional", "Enterprise"])
+        custom_option = st.selectbox("Select Option", ["Professional Plan (Commercial)", "Enterprise Plan (Commercial)"])
     elif custom_segment == "GCC":
         custom_option = st.selectbox("Select Option", ["Turnkey CMMC Level 2 Plan (GCC)", "Turnkey CMMC Level 3 Plan (GCC)"])
     elif custom_segment == "GCC-H":
