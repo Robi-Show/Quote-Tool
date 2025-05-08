@@ -50,7 +50,7 @@ def load_data():
         available_sheet_names = list(all_sheets.keys())
         cisco_meraki = None
         m365_sheet = None
-        resale_sheet = all_sheets.get("Third Party Resale", pd.DataFrame())
+        resale_sheet = all_sheets.get("Third Party Resale ", pd.DataFrame())
         if not resale_sheet.empty:
             resale_sheet.columns = resale_sheet.columns.str.strip()
             resale_sheet = resale_sheet[~resale_sheet["Price"].astype(str).str.strip().isin(["Quote Only", "Custom", "Ad Hoc as needed"])]
