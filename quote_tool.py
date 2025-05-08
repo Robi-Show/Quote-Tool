@@ -51,12 +51,26 @@ def load_data():
         cisco_meraki = None
         m365_sheet = None
         resale_sheet = all_sheets.get("Third Party Resale ", pd.DataFrame())
-        if not resale_sheet.empty:
-            resale_sheet.columns = resale_sheet.columns.str.strip()
-            resale_sheet = resale_sheet[~resale_sheet["Price"].astype(str).str.strip().isin(["Quote Only", "Custom", "Ad Hoc as needed"])]
+    if not resale_sheet.empty:
+        # Clean column names just in case (strip spaces and standardize case)
+        resale_sheet.columns = resale_sheet.columns.str.strip()
+
+        # Validate required columns exist
+        required_cols = {"Vendor", "SKU", "Price"}
+        if not required_cols.issubset(set(resale_sheet.columns)):
+            st.error(f"The 'Third Party Resale' sheet must include columns: {', '.join(required_cols)}")
+            st.stop()
+    
+        # Filter out rows with 'Quote Only', 'Custom', etc. in the Price column
+        resale_sheet = resale_sheet[
+            ~resale_sheet["Price"].astype(str).str.strip().isin(["Quote Only", "Custom", "Ad Hoc as needed"])
+        ]
+
+        # Rename SKU to Item
             resale_sheet = resale_sheet.rename(columns={"SKU": "Item"})
-        else:
-            resale_sheet = pd.DataFrame()
+
+    else:
+        resale_sheet = pd.DataFrame()
 
         # Remove spaces and lowercase sheet names for robust matching
         for sheet_name, df in all_sheets.items():
@@ -204,11 +218,17 @@ else:
 # ----------------------------------------
 # Resale Section (same font as Ariento Licenses)
 # ----------------------------------------
-
 if business_model == "Resale":
     st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Third Party Licenses</h2>', unsafe_allow_html=True)
+    
+    # Safety check
+    required_cols = {"Vendor", "Item", "Price"}
+    if not required_cols.issubset(set(resale_sheet.columns)):
+        st.error(f"Missing one or more required columns in Resale sheet: {', '.join(required_cols)}")
+        st.stop()
+
     resale_selections = []
-    vendor_options = resale_sheet[Vendor].dropna().unique()
+    vendor_options = resale_sheet["Vendor"].dropna().unique()
 
     while True:
         cols = st.columns(3)
@@ -216,25 +236,32 @@ if business_model == "Resale":
             vendor = st.selectbox("Select Vendor", ["Select Vendor"] + list(vendor_options), key=f"resale_vendor_{len(resale_selections)}")
         if vendor == "Select Vendor" or vendor == "":
             break
-        vendor_items = resale_sheet[resale_sheet[Vendor] == vendor][SKU].dropna().unique()
+
+        # Filter items for this vendor
+        vendor_items = resale_sheet[resale_sheet["Vendor"] == vendor]["Item"].dropna().unique()
         with cols[1]:
-            item = st.selectbox("Select Item", [SKU] + list(vendor_items), key=f"resale_item_{len(resale_selections)}")
+            item = st.selectbox("Select Item", ["Select Item"] + list(vendor_items), key=f"resale_item_{len(resale_selections)}")
         if item == "Select Item" or item == "":
             break
+
         with cols[2]:
             quantity = st.number_input(f"Quantity for {vendor} - {item}", min_value=0, value=1, key=f"resale_qty_{len(resale_selections)}")
+
         if quantity > 0:
-            row_match = resale_sheet[(resale_sheet[Vendor] == vendor) & (resale_sheet[SKU] == item)]
+            row_match = resale_sheet[(resale_sheet["Vendor"] == vendor) & (resale_sheet["Item"] == item)]
             if not row_match.empty:
-                price = row_match[Price].values[0]
-                cost = price * quantity
-                st.write(f"Price: ${price:.2f} | Quantity: {quantity} | Cost: ${cost:.2f}")
-                resale_selections.append({
-                    "Vendor": vendor,
-                    "Item": item,
-                    "Price": price,
-                    "Quantity": quantity
-                })
+                try:
+                    price = float(row_match["Price"].values[0])
+                    cost = price * quantity
+                    st.write(f"Price: ${price:.2f} | Quantity: {quantity} | Cost: ${cost:.2f}")
+                    resale_selections.append({
+                        "Vendor": vendor,
+                        "Item": item,
+                        "Price": price,
+                        "Quantity": quantity
+                    })
+                except ValueError:
+                    st.warning("Selected item has an invalid price value.")
 
 # ----------------------------------------
 # M365 Section (same font as Ariento Licenses)
