@@ -87,8 +87,8 @@ def load_data():
         st.error(f"Error loading Service Catalogue Excel file: {e}")
         st.stop()
 
-    # ✅ Resale Sheet — OUTSIDE the try block
-    resale_sheet = all_sheets.get("Third Party Resale", pd.DataFrame())
+    # Resale Sheet — OUTSIDE the try block
+    resale_sheet = all_sheets.get("Third Party Resale ", pd.DataFrame())
     if not resale_sheet.empty:
         resale_sheet.columns = resale_sheet.columns.str.strip()
         resale_sheet = resale_sheet[
