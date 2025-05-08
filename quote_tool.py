@@ -504,7 +504,7 @@ raw_resale_cost = sum(
 ) if business_model == "Resale" else 0
 
 microsoft_cost = raw_m365_cost
-service_cost = raw_meraki_cost + raw_rawresale_cost
+service_cost = raw_meraki_cost + raw_resale_cost
 
 if business_model != "Resale" and business_model != "Enclave One":
     raw_onboarding = max(2 * raw_ariento_cost / (12 if ariento_billing == "Annual" else 1), 3000)
