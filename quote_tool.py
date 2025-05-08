@@ -45,66 +45,59 @@ def load_data():
         st.error("Failed to fetch the Service Catalogue Excel file. Please check the file URL.")
         st.stop()
     service_file = BytesIO(response_service.content)
+
     try:
         all_sheets = pd.read_excel(service_file, sheet_name=None)
         available_sheet_names = list(all_sheets.keys())
+
         cisco_meraki = None
         m365_sheet = None
-        resale_sheet = all_sheets.get("Third Party Resale ", pd.DataFrame())
-    if not resale_sheet.empty:
-        # Clean column names just in case (strip spaces and standardize case)
-        resale_sheet.columns = resale_sheet.columns.str.strip()
 
-        # Validate required columns exist
-        required_cols = {"Vendor", "SKU", "Price"}
-        if not required_cols.issubset(set(resale_sheet.columns)):
-            st.error(f"The 'Third Party Resale' sheet must include columns: {', '.join(required_cols)}")
-            st.stop()
-    
-        # Filter out rows with 'Quote Only', 'Custom', etc. in the Price column
-        resale_sheet = resale_sheet[
-            ~resale_sheet["Price"].astype(str).str.strip().isin(["Quote Only", "Custom", "Ad Hoc as needed"])
-        ]
-
-        # Rename SKU to Item
-            resale_sheet = resale_sheet.rename(columns={"SKU": "Item"})
-
-    else:
-        resale_sheet = pd.DataFrame()
-
-        # Remove spaces and lowercase sheet names for robust matching
         for sheet_name, df in all_sheets.items():
             lower_name = sheet_name.lower().replace(" ", "")
             if "ciscomeraki" in lower_name:
                 cisco_meraki = df
             if "m365" in lower_name:
                 m365_sheet = df
+
         if cisco_meraki is None or m365_sheet is None:
-            st.error("One or more required sheets (Cisco Meraki, M365) not found in Service+Catalogue.xlsx. Available sheets: " + ", ".join(available_sheet_names))
+            st.error("Required sheets (Cisco Meraki, M365) not found. Available: " + ", ".join(available_sheet_names))
             st.stop()
-        m365 = m365_sheet
+
+        # Clean Cisco & M365
+        def filter_sheet(df, required_cols):
+            df.columns = df.columns.str.strip()
+            for col in required_cols:
+                if col in df.columns:
+                    df = df.dropna(subset=[col])
+            if "Price" in df.columns:
+                df = df[~df["Price"].astype(str).str.strip().isin(["Quote Only", "Custom", "Ad Hoc as needed"])]
+            for col in ["Notes", "Minimum Specs"]:
+                if col in df.columns:
+                    df = df.drop(columns=[col])
+            return df
+
+        cisco_meraki = filter_sheet(cisco_meraki, ["Price"])
+        m365 = filter_sheet(m365_sheet, ["Billing Cycle", "Term Commit", "Price"])
+
+        if "Segment" in m365.columns:
+            m365 = m365[~m365["Segment"].isin(["Education", "Charity", "GCC-High GOV ONLY"])]
+
     except Exception as e:
         st.error(f"Error loading Service Catalogue Excel file: {e}")
         st.stop()
 
-    def filter_sheet(df, required_cols):
-        df.columns = df.columns.str.strip()
-        for col in required_cols:
-            if col in df.columns:
-                df = df.dropna(subset=[col])
-        if "Price" in df.columns:
-            df = df[~df["Price"].astype(str).str.strip().isin(["Quote Only", "Custom", "Ad Hoc as needed"])]
-        for col in ["Notes", "Minimum Specs"]:
-            if col in df.columns:
-                df = df.drop(columns=[col])
-        return df
+    # ✅ Resale Sheet — OUTSIDE the try block
+    resale_sheet = all_sheets.get("Third Party Resale", pd.DataFrame())
+    if not resale_sheet.empty:
+        resale_sheet.columns = resale_sheet.columns.str.strip()
+        resale_sheet = resale_sheet[
+            ~resale_sheet["Price"].astype(str).str.strip().isin(["Quote Only", "Custom", "Ad Hoc as needed"])
+        ]
+        resale_sheet = resale_sheet.rename(columns={"SKU": "Item"})
+    else:
+        resale_sheet = pd.DataFrame()
 
-    cisco_meraki = filter_sheet(cisco_meraki, ["Price"])
-    # For M365, use "Term Commit" exactly as in the Excel file.
-    m365 = filter_sheet(m365, ["Billing Cycle", "Term Commit", "Price"])
-    if "Segment" in m365.columns:
-        m365 = m365[~m365["Segment"].isin(["Education", "Charity", "GCC-High GOV ONLY"])]
-    
     return ariento_plans, license_types, cisco_meraki, m365, resale_sheet
 
 def get_default_segment(plan):
