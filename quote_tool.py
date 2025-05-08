@@ -50,6 +50,14 @@ def load_data():
         available_sheet_names = list(all_sheets.keys())
         cisco_meraki = None
         m365_sheet = None
+        resale_sheet = all_sheets.get("Resale", pd.DataFrame())
+        if not resale_sheet.empty:
+            resale_sheet.columns = resale_sheet.columns.str.strip()
+            resale_sheet = resale_sheet[~resale_sheet["Price"].astype(str).str.strip().isin(["Quote Only", "Custom", "Ad Hoc as needed"])]
+            resale_sheet = resale_sheet.rename(columns={"SKU": "Item"})
+        else:
+            resale_sheet = pd.DataFrame()
+
         # Remove spaces and lowercase sheet names for robust matching
         for sheet_name, df in all_sheets.items():
             lower_name = sheet_name.lower().replace(" ", "")
@@ -83,7 +91,7 @@ def load_data():
     if "Segment" in m365.columns:
         m365 = m365[~m365["Segment"].isin(["Education", "Charity", "GCC-High GOV ONLY"])]
     
-    return ariento_plans, license_types, cisco_meraki, m365
+    return ariento_plans, license_types, cisco_meraki, m365, resale_sheet
 
 def get_default_segment(plan):
     if "GCC-H" in plan or "GCCH" in plan:
@@ -96,7 +104,7 @@ def get_default_segment(plan):
         return None
 
 # Load data
-ariento_plans, license_types, cisco_meraki, m365 = load_data()
+ariento_plans, license_types, cisco_meraki, m365, resale_sheet = load_data()
 
 # ----------------------------------------
 # Title, Logo, and Description
@@ -121,7 +129,7 @@ def sanitize_filename(name):
     return re.sub(r'[^a-zA-Z0-9_\-]', '_', name)
 
 st.markdown("### Business Model Selection")
-business_model = st.radio("Select Business Model", options=["Enclave One", "Custom Enclave", "MSSP", "Third Party Resell"])
+business_model = st.radio("Select Business Model", options=["Enclave One", "Custom Enclave", "MSSP", "Resale"])
 
 if business_model == "Enclave One":
     enclave_option = st.selectbox("Select Enclave One Option", ["Enclave One (GCC)", "Enclave One (GCC-H)"])
@@ -135,10 +143,10 @@ elif business_model == "Custom Enclave":
         custom_option = st.selectbox("Select Option", ["Turnkey CMMC Level 2 Plan (GCC-High)", "Turnkey CMMC Level 3 Plan (GCC-High)"])
 elif business_model == "MSSP":
     mssp_option = "MSSP"
-elif business_model == "Third Party Resell":
-    tpr_option = "Third Party Resell"
+elif business_model == "Resale":
+    tpr_option = "Resale"
 
-if business_model != "Third Party Resell":
+if business_model != "Resale":
     if business_model == "Enclave One":
         ariento_plan = enclave_option
     elif business_model == "Custom Enclave":
@@ -156,11 +164,11 @@ else:
     file_prefix = "quote"
 
 # ----------------------------------------
-# Ariento Licenses Section (Hidden if Third Party Resell)
+# Ariento Licenses Section (Hidden if Third Party Resale)
 # Billing Cycle: For Enclave One with "GCC-H" force Annual; else allow both.
 # Add Tooltip link "See Types"
 # ----------------------------------------
-if business_model != "Third Party Resell":
+if business_model != "Resale":
     st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Ariento Licenses</h2>', unsafe_allow_html=True)
     if business_model == "Enclave One" and ariento_plan and ("GCC-H" in ariento_plan or "GCCH" in ariento_plan):
         ariento_billing_options = ["Annual"]
@@ -194,10 +202,45 @@ else:
     seat_types = {}
 
 # ----------------------------------------
+# Resale Section (same font as Ariento Licenses)
+# ----------------------------------------
+
+if business_model == "Resale":
+    st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Third Party Licenses</h2>', unsafe_allow_html=True)
+    resale_selections = []
+    vendor_options = resale_sheet["Vendor"].dropna().unique()
+
+    while True:
+        cols = st.columns(3)
+        with cols[0]:
+            vendor = st.selectbox("Select Vendor", ["Select Vendor"] + list(vendor_options), key=f"resale_vendor_{len(resale_selections)}")
+        if vendor == "Select Vendor" or vendor == "":
+            break
+        vendor_items = resale_sheet[resale_sheet["Vendor"] == vendor]["Item"].dropna().unique()
+        with cols[1]:
+            item = st.selectbox("Select Item", ["Select Item"] + list(vendor_items), key=f"resale_item_{len(resale_selections)}")
+        if item == "Select Item" or item == "":
+            break
+        with cols[2]:
+            quantity = st.number_input(f"Quantity for {vendor} - {item}", min_value=0, value=1, key=f"resale_qty_{len(resale_selections)}")
+        if quantity > 0:
+            row_match = resale_sheet[(resale_sheet["Vendor"] == vendor) & (resale_sheet["Item"] == item)]
+            if not row_match.empty:
+                price = row_match["Price"].values[0]
+                cost = price * quantity
+                st.write(f"Price: ${price:.2f} | Quantity: {quantity} | Cost: ${cost:.2f}")
+                resale_selections.append({
+                    "Vendor": vendor,
+                    "Item": item,
+                    "Price": price,
+                    "Quantity": quantity
+                })
+
+# ----------------------------------------
 # M365 Section (same font as Ariento Licenses)
 # ----------------------------------------
 st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">M365 Licenses</h2>', unsafe_allow_html=True)
-if business_model != "Third Party Resell":
+if business_model != "Resale":
     default_segment = get_default_segment(ariento_plan)
 else:
     default_segment = None
@@ -296,7 +339,7 @@ while True:
         else:
             st.warning("No matching row found for this description.")
 
-if business_model != "Third Party Resell":
+if business_model != "Resale":
     ariento_base_cost = sum(
         qty * (license_types.loc[
             (license_types["Plan"] == ariento_plan) & (license_types["Seat Type"] == seat),
@@ -318,7 +361,7 @@ else:
 # ----------------------------------------
 # Onboarding Section (same font as Ariento Licenses)
 # ----------------------------------------
-if business_model != "Third Party Resell":
+if business_model != "Resale":
     st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Onboarding</h2>', unsafe_allow_html=True)
 
     onboarding_type = st.selectbox("Select Onboarding Payment Type", ["One Time Onboarding Payment", "Other", "None"])
@@ -413,10 +456,14 @@ raw_meraki_cost = sum(
     msel["Price"] * msel["Quantity"] for msel in meraki_selections
 ) if meraki_selections else 0
 
-microsoft_cost = raw_m365_cost
-service_cost = raw_meraki_cost
+raw_resale_cost = sum(
+    item["Price"] * item["Quantity"] for item in resale_selections
+) if business_model == "Resale" else 0
 
-if business_model != "Third Party Resell" and business_model != "Enclave One":
+microsoft_cost = raw_m365_cost
+service_cost = raw_meraki_cost + raw_rawresale_cost
+
+if business_model != "Resale" and business_model != "Enclave One":
     raw_onboarding = max(2 * raw_ariento_cost / (12 if ariento_billing == "Annual" else 1), 3000)
 else:
     raw_onboarding = 0
@@ -461,7 +508,7 @@ st.markdown('<h2 style="font-family: Arial; font-size: 14pt; color: #E8A33D;">Su
 data = []
 
 # Ariento Licenses
-if business_model != "Third Party Resell":
+if business_model != "Resale":
     for seat, qty in seat_types.items():
         price_row = license_types.loc[
             (license_types["Plan"] == ariento_plan) & (license_types["Seat Type"] == seat),
@@ -494,8 +541,16 @@ for msel in meraki_selections:
     cost = price * qty
     data.append(["Cisco Meraki", f"{msel['Description']} (SKU: {msel['SKU']})", qty, f"${price:.2f}", f"${cost:.2f}"])
 
+# Resale
+if business_model == "Resale":
+    for item in resale_selections:
+        price = item["Price"]
+        qty = item["Quantity"]
+        cost = price * qty
+        data.append(["Resale License", f"{item['Vendor']} - {item['Item']}", qty, f"${price:.2f}", f"${cost:.2f}"])
+
 # Onboarding
-if business_model != "Third Party Resell" and show_onboarding:
+if business_model != "Resale" and show_onboarding:
     data.append(["Onboarding", business_model, 1, f"${onboarding_price:.2f}", f"${onboarding_price:.2f}"])
 
 # Discounts
@@ -575,9 +630,13 @@ def generate_pdf(df, company_name):
         elements.append(Paragraph(f"Ariento Licenses Cost ({ariento_billing} Recurring): ${new_ariento_cost:.2f}", styles['Heading2']))
     if microsoft_cost > 0:
         elements.append(Paragraph(f"{microsoft_label}: ${microsoft_cost:.2f}", styles['Heading2']))
+    if raw_meraki_cost > 0:
+        elements.append(Paragraph(f"Cisco Meraki Costs: ${raw_meraki_cost:.2f}", styles['Normal']))
+    if raw_resale_cost > 0:
+        elements.append(Paragraph(f"Resale License Costs: ${raw_resale_cost:.2f}", styles['Normal']))
     if service_cost > 0:
-        elements.append(Paragraph(f"Meraki w/ License Costs: ${service_cost:.2f}", styles['Heading2']))
-    if business_model != "Third Party Resell" and show_onboarding:
+        elements.append(Paragraph(f"Other Resale Licenses Costs: ${service_cost:.2f}", styles['Heading2']))
+    if business_model != "Resale" and show_onboarding:
         elements.append(Paragraph(f"{business_model} Onboarding (One-Time): ${onboarding_price:.2f}", styles['Heading2']))
     elements.append(Spacer(1, 12))
     wrap_style = ParagraphStyle(name="WrappedText", fontName="Helvetica", fontSize=10, leading=12, wordWrap="LTR")
